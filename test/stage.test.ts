@@ -98,4 +98,30 @@ function applyNagSuppression(stack: Stack) {
     ],
     true
   );
+
+  NagSuppressions.addResourceSuppressionsByPath(
+    stack,
+    `/SequenceRunManagerStack/LambdaRole/DefaultPolicy/Resource`,
+    [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason:
+          '* is required to access the temporary linking data files by the enrichment lambda function.',
+      },
+    ],
+    true
+  );
+
+  NagSuppressions.addResourceSuppressionsByPath(
+    stack,
+    `/SequenceRunManagerStack/SrmTempLinkingDataBucket/Resource`,
+    [
+      {
+        id: 'AwsSolutions-S1',
+        reason:
+          'S3 Bucket has server access logs disabled as temporary linking data files are not accessed by the API, only by the enrichment lambda function',
+      },
+    ],
+    true
+  );
 }
