@@ -38,7 +38,7 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
     apiGatewayCognitoProps: {
       ...getDefaultApiGatewayConfiguration(stage),
       apiName: 'SequenceRunManager',
-      customDomainNamePrefix: 'sequence-dev-deploy',
+      customDomainNamePrefix: 'sequence',
     },
     bsshTokenSecretName: basespaceAccessTokenSecretName,
     slackTopicName: slackTopicNameDict[stage],
