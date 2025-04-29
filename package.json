@@ -1,13 +1,11 @@
 {
-  "name": "template-service-base",
+  "name": "service-sequence-run-manager",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "tsc && jest",
-    "cdk": "cdk",
-    "cdk-stateless": "cdk -c deployMode=stateless",
-    "cdk-stateful": "cdk -c deployMode=stateful",
+    "cdk": "cdk -c deployMode=stateless",
     "prepare": "pre-commit install",
     "prettier": "prettier --check .",
     "prettier-fix": "prettier --write .",
@@ -38,8 +36,9 @@
     "typescript-eslint": "^8.28.0"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.185.0",
+    "aws-cdk-lib": "^2.192.0",
     "constructs": "^10.4.2",
-    "@orcabus/platform-cdk-constructs": "0.0.6"
+    "@orcabus/platform-cdk-constructs": "0.0.6",
+    "@aws-cdk/aws-lambda-python-alpha": "2.192.0-alpha.0"
   }
 }
