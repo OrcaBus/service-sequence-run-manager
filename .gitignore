@@ -13,3 +13,9 @@ cdk.out
 # IDE
 .idea
 .DS_Store
+
+# Python environments
+venv/
+.venv/
+env/
+.env
