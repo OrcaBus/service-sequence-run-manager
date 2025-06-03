@@ -21,18 +21,6 @@ def check_or_create_sequence_run_libraries_linking(payload: dict):
         logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence run libraries linking")
         raise ValueError(f"Sequence run {payload['id']} not found")
 
-    # if libraries are already linked, skip
-    if LibraryAssociation.objects.filter(sequence=sequence_run).exists():
-        return
-
-    return create_sequence_run_libraries_linking(sequence_run)
-
-
-@transaction.atomic
-def create_sequence_run_libraries_linking(sequence_run: Sequence):
-    """
-    Create sequence run libraries linking
-    """
     linked_libraries = []
     sample_sheet = SampleSheet.objects.get(sequence=sequence_run)
     if sample_sheet:
@@ -41,6 +29,23 @@ def create_sequence_run_libraries_linking(sequence_run: Sequence):
         bssh_srv = BSSHService()
         run_details = bssh_srv.get_run_details(sequence_run.api_url)
         linked_libraries = BSSHService.get_libraries_from_run_details(run_details)
+
+    # if libraries are already linked, check if the libraries are the same
+    if LibraryAssociation.objects.filter(sequence=sequence_run).exists():
+        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
+        if set(existing_libraries) == set(linked_libraries):
+            return
+        else:
+            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+
+    return create_sequence_run_libraries_linking(sequence_run, linked_libraries)
+
+
+@transaction.atomic
+def create_sequence_run_libraries_linking(sequence_run: Sequence, linked_libraries: list[str]):
+    """
+    Create sequence run libraries linking
+    """
 
     if linked_libraries:
         for library_id in linked_libraries:
