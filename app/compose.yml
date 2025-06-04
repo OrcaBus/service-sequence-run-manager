@@ -18,3 +18,10 @@ services:
       timeout: 60s
       retries: 5
       start_period: 90s
+
+  localstack:
+    # Use a version that align with upper bound of AWS LocalStack LTS
+    image: public.ecr.aws/localstack/localstack:3
+    container_name: orcabus_localstack
+    ports:
+      - '4566:4566'
