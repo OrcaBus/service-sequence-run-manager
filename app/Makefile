@@ -33,7 +33,7 @@ start: migrate
 	@python manage.py runserver_plus 0.0.0.0:8000
 
 openapi:
-	@python manage.py generateschema > orcabus.sequencerunmanager.openapi.yaml
+	@python manage.py spectacular --format openapi > orcabus.sequencerunmanager.openapi.yaml
 
 validate: openapi
 	@python -m openapi_spec_validator orcabus.sequencerunmanager.openapi.yaml
@@ -63,8 +63,8 @@ psql:
 # database operation
 
 reset-db:
-	@docker exec -e PGPASSWORD=orcabus -it orcabus_db psql -h $(DB_HOSTNAME) -U orcabus -d orcabus -c "DROP DATABASE IF EXISTS sequence_run_manager;"
-	@docker exec -e PGPASSWORD=orcabus -it orcabus_db psql -h $(DB_HOSTNAME) -U orcabus -d orcabus -c "CREATE DATABASE sequence_run_manager;"
+	@docker exec -e PGPASSWORD=orcabus -it orcabus_db psql -h $(DB_HOSTNAME) -U orcabus -d postgres -c "DROP DATABASE IF EXISTS sequence_run_manager;"
+	@docker exec -e PGPASSWORD=orcabus -it orcabus_db psql -h $(DB_HOSTNAME) -U orcabus -d postgres -c "CREATE DATABASE sequence_run_manager;"
 
 s3-dump-download:
 	@aws s3 cp s3://orcabus-test-data-843407916570-ap-southeast-2/sequence-run-manager/srm_dump.sql.gz data/srm_dump.sql.gz

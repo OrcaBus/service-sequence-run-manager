@@ -14,7 +14,7 @@ See [deploy/README.md](deploy)
 
 - Go to Django project root
 ```
-cd lib/workload/stateless/stacks/sequence-run-manager
+cd app
 ```
 _*If you are PyCharm-er and opening the whole `orcabus` project then annotate this level as "source" directory in the project structure dialog._
 
@@ -122,11 +122,29 @@ Or visit in browser:
 
 #### Swagger
 
-- http://localhost:8000/swagger-ui/
+- http://localhost:8000/schema/swagger-ui/
 
 #### OpenAPI v3
 
 - http://localhost:8000/schema/openapi.json
+
+
+## Local DB
+
+```
+make psql
+```
+
+```
+sequence_run_manager# \l
+sequence_run_manager# \c sequence_run_manager
+sequence_run_manager# \dt
+sequence_run_manager# \d
+sequence_run_manager# \d sequence_run_manager_sequence
+sequence_run_manager# select count(1) from sequence_run_manager_sequence;
+sequence_run_manager# select * from sequence_run_manager_sequence;
+sequence_run_manager# \q
+```
 
 ## Testing
 
