@@ -1,8 +1,27 @@
-include:
-  - path:
-      - ./shared/mock-aws.yml
-      - ./shared/mock-db.yml
-#services:
-#
-#  myapp:
-#    image: myapp
+services:
+  db:
+    # Use a version that align with upper bound of AWS Aurora PostgreSQL LTS
+    # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Updates.LTS.html
+    # See container image doc https://gallery.ecr.aws/docker/library/postgres for more settings
+    image: public.ecr.aws/docker/library/postgres:16
+    container_name: orcabus_db
+    restart: always
+    environment:
+      - POSTGRES_DB=sequence_run_manager
+      - POSTGRES_USER=orcabus
+      - POSTGRES_PASSWORD=orcabus
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d sequence_run_manager -U orcabus']
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 90s
+
+  localstack:
+    # Use a version that align with upper bound of AWS LocalStack LTS
+    image: public.ecr.aws/localstack/localstack:3
+    container_name: orcabus_localstack
+    ports:
+      - '4566:4566'
