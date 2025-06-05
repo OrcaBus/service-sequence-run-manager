@@ -107,6 +107,8 @@ export class SequenceRunManagerStack extends Stack {
     this.createApiHandlerAndIntegration(props);
     this.createProcSqsHandler();
     this.createSlackNotificationHandler(props.slackTopicName, props.orcabusUIBaseUrl);
+    this.createProcSampleSheetHandler();
+    this.createProcLibraryLinkingHandler();
   }
 
   private createPythonFunction(name: string, props: object): PythonFunction {
@@ -193,10 +195,10 @@ export class SequenceRunManagerStack extends Stack {
     });
 
     this.mainBus.grantPutEventsTo(procSqsFn);
-    this.setupEventRule(procSqsFn); // TODO comment this out for now
+    this.setupProcSqsEventRule(procSqsFn); // TODO comment this out for now
   }
 
-  private setupEventRule(fn: IFunction) {
+  private setupProcSqsEventRule(fn: IFunction) {
     /**
      * For sequence run manager, we are using orcabus events ( source from BSSH ENS event pipe) to trigger the lambda function.
      * event rule to filter the events that we are interested in.
@@ -234,6 +236,67 @@ export class SequenceRunManagerStack extends Stack {
       },
     });
 
+    eventRule.addTarget(new LambdaFunction(fn));
+  }
+
+  private createProcSampleSheetHandler() {
+    const procSampleSheetFn = this.createPythonFunction('ProcSampleSheetHandler', {
+      index: 'sequence_run_manager_proc/lambdas/samplesheet_event.py',
+      handler: 'event_handler',
+      timeout: Duration.minutes(2),
+    });
+
+    this.mainBus.grantPutEventsTo(procSampleSheetFn);
+    this.setupProcSampleSheetEventRule(procSampleSheetFn);
+  }
+
+  private setupProcSampleSheetEventRule(fn: IFunction) {
+    const eventRule = new Rule(this, this.stackName + 'ProcSampleSheetEventRule', {
+      ruleName: this.stackName + 'ProcSampleSheetEventRule',
+      description: 'Rule to send SampleSheet events to the ProcSampleSheetHandler Lambda',
+      eventBus: this.mainBus,
+    });
+    eventRule.addEventPattern({
+      detailType: ['SequenceRunSampleSheetChange'],
+      detail: {
+        instrumentRunId: [{ exists: true }],
+        sequenceRunId: [{ exists: true }],
+        sequenceOrcabusId: [{ exists: true }],
+        timeStamp: [{ exists: true }],
+        sampleSheetName: [{ exists: true }],
+        samplesheetbase64gz: [{ exists: true }],
+      },
+    });
+    eventRule.addTarget(new LambdaFunction(fn));
+  }
+
+  private createProcLibraryLinkingHandler() {
+    const procLibraryLinkingFn = this.createPythonFunction('ProcLibraryLinkingHandler', {
+      index: 'sequence_run_manager_proc/lambdas/librarylinking_event.py',
+      handler: 'event_handler',
+      timeout: Duration.minutes(2),
+    });
+
+    this.mainBus.grantPutEventsTo(procLibraryLinkingFn);
+    this.setupProcLibraryLinkingEventRule(procLibraryLinkingFn);
+  }
+
+  private setupProcLibraryLinkingEventRule(fn: IFunction) {
+    const eventRule = new Rule(this, this.stackName + 'ProcLibraryLinkingEventRule', {
+      ruleName: this.stackName + 'ProcLibraryLinkingEventRule',
+      description: 'Rule to send LibraryLinking events to the ProcLibraryLinkingHandler Lambda',
+      eventBus: this.mainBus,
+    });
+    eventRule.addEventPattern({
+      detailType: ['SequenceRunLibraryLinkingChange'],
+      detail: {
+        instrumentRunId: [{ exists: true }],
+        sequenceRunId: [{ exists: true }],
+        sequenceOrcabusId: [{ exists: true }],
+        timeStamp: [{ exists: true }],
+        linkedLibraries: [{ exists: true }],
+      },
+    });
     eventRule.addTarget(new LambdaFunction(fn));
   }
 

@@ -1,4 +1,3 @@
-import json
 import base64
 import ulid
 from datetime import datetime, timezone
@@ -7,13 +6,9 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
-from drf_spectacular.types import OpenApiTypes
-
-from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation, Comment
+from sequence_run_manager.models import Sequence
 from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
 
 from v2_samplesheet_parser.functions.retriever import retrieve_library_from_csv_samplesheet
@@ -87,29 +82,13 @@ class SequenceRunActionViewSet(ViewSet):
         )
         sequence_run.save()
 
-        # step 2: read the uploaded samplesheet and save to samplesheet table
+        # step 2: read the uploaded samplesheet, and encodeed with base64
         samplesheet_content = ''
         with uploaded_samplesheet.open('rb') as f:
             samplesheet_content = f.read()
-
-        sample_sheet = SampleSheet(
-            sequence=sequence_run,
-            sample_sheet_name=samplesheet_name,
-            sample_sheet_content=samplesheet_content
-        )
-        sample_sheet.save()
-
-        # step 3: save the comment to the database
-        comment_obj = Comment(
-            association_id=sample_sheet.orcabus_id,
-            comment=comment,
-            created_by=created_by,
-            created_at=datetime.now(),
-        )
-        comment_obj.save()
-
-        # step 3: get encoded with base64 and construct event bridge detail
         samplesheet_base64 = base64.b64encode(samplesheet_content).decode('utf-8')
+
+        # step 3: construct event bridge detail
         samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64, comment, created_by)
 
         # step 4: emit event to event bridge
@@ -117,20 +96,8 @@ class SequenceRunActionViewSet(ViewSet):
 
         # step 5: check if there is library linking change
         linking_libraries = retrieve_library_from_csv_samplesheet(samplesheet_content)
-        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
-
-        # step 6: if there is library linking change, save the libraries to the database
-        if set(linking_libraries) != set(existing_libraries):
-            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
-            for library_id in linking_libraries:
-                LibraryAssociation.objects.create(
-                    sequence=sequence_run,
-                    library_id=library_id,
-                    association_date=datetime.now(),
-                    status="active",
-                )
-
-            # step 7: emit library linking change event to event bridge
+        if linking_libraries:
+            # step 6: emit library linking change event to event bridge
             library_linking_change_eb_payload = construct_library_linking_change_eb_payload(sequence_run, linking_libraries)
             emit_srm_api_event(library_linking_change_eb_payload)
 

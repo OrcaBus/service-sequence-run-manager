@@ -7,7 +7,7 @@ from libumccr.aws import libssm
 
 from sequence_run_manager.models import Sequence
 from sequence_run_manager.models.sequence import SequenceStatus
-from sequence_run_manager_proc.domain.sequencerunstatechange import (
+from sequence_run_manager_proc.domain.events.sequencerunstatechange import (
     SequenceRunStateChange,
     AWSEvent,
     Marshaller,

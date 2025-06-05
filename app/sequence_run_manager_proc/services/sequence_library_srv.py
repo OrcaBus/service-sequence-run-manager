@@ -11,35 +11,6 @@ logger = logging.getLogger(__name__)
 ASSOCIATION_STATUS = "ACTIVE"
 
 
-def check_or_create_sequence_run_libraries_linking(payload: dict):
-    """
-    Check if libraries are linked to the sequence run;
-    if not, create the linking
-    """
-    sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
-    if not sequence_run:
-        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence run libraries linking")
-        raise ValueError(f"Sequence run {payload['id']} not found")
-
-    linked_libraries = []
-    sample_sheet = SampleSheet.objects.get(sequence=sequence_run)
-    if sample_sheet:
-        linked_libraries = get_sample_sheet_libraries(sample_sheet)
-    else:
-        bssh_srv = BSSHService()
-        run_details = bssh_srv.get_run_details(sequence_run.api_url)
-        linked_libraries = BSSHService.get_libraries_from_run_details(run_details)
-
-    # if libraries are already linked, check if the libraries are the same
-    if LibraryAssociation.objects.filter(sequence=sequence_run).exists():
-        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
-        if set(existing_libraries) == set(linked_libraries):
-            return
-        else:
-            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
-
-    return create_sequence_run_libraries_linking(sequence_run, linked_libraries)
-
 
 @transaction.atomic
 def create_sequence_run_libraries_linking(sequence_run: Sequence, linked_libraries: list[str]):
@@ -60,6 +31,76 @@ def create_sequence_run_libraries_linking(sequence_run: Sequence, linked_librari
     else:
         logger.info(f"No libraries found for sequence run {sequence_run.sequence_run_id}")
 
+def update_sequence_run_libraries_linking(sequence_run: Sequence, linked_libraries: list[str]):
+    """
+    Update sequence run libraries linking
+    """
+    if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linked_libraries:
+        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
+        if set(existing_libraries) == set(linked_libraries):
+            logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
+            return
+        else:
+            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+            logger.info(f"Library associations deleted for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
+    return create_sequence_run_libraries_linking(sequence_run, linked_libraries)
+
+def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict):
+    """
+    Check if libraries are linked to the sequence run;
+    if not, create the linking
+    """
+    assert payload["id"] is not None, "sequence run id is required"
+
+    sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
+    if not sequence_run:
+        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence run libraries linking")
+        raise ValueError(f"Sequence run {payload['id']} not found")
+
+    linked_libraries = []
+    sample_sheet = SampleSheet.objects.get(sequence=sequence_run)
+    if sample_sheet:
+        linked_libraries = get_sample_sheet_libraries(sample_sheet)
+    else:
+        bssh_srv = BSSHService()
+        run_details = bssh_srv.get_run_details(sequence_run.api_url)
+        linked_libraries = BSSHService.get_libraries_from_run_details(run_details)
+
+    # if libraries are already linked, check if the libraries are the same
+    if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linked_libraries:
+        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
+        if set(existing_libraries) == set(linked_libraries):
+            return
+        else:
+            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+
+    return create_sequence_run_libraries_linking(sequence_run, linked_libraries)
+
+@transaction.atomic
+def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):
+    """
+    This function is used to check or create sequence run libraries linking from event details(SRLLC)
+    event detail example:
+    {
+    "sequenceOrcabusId": "seq.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
+    "linkedLibraries": [
+                "L2000000",
+                "L2000001",
+                "L2000002"
+                ]
+    }
+    """
+    assert event_detail["sequenceOrcabusId"] is not None, "sequence orcabus id is required"
+    assert event_detail["linkedLibraries"] is not None, "linked libraries are required"
+
+    sequence_run = Sequence.objects.get(orcabus_id=event_detail["sequenceOrcabusId"])
+    if not sequence_run:
+        logger.error(f"Sequence run {event_detail['sequenceOrcabusId']} not found when checking or creating sequence run libraries linking")
+        raise ValueError(f"Sequence run {event_detail['sequenceOrcabusId']} not found")
+
+    linked_libraries = event_detail["linkedLibraries"]
+
+    return update_sequence_run_libraries_linking(sequence_run, linked_libraries)
 
 # metadata manager service
 # TODO ( thinking about if this is necessary):

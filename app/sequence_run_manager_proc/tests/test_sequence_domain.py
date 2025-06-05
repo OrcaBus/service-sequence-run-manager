@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sequence_run_manager.tests.factories import SequenceFactory
 from sequence_run_manager_proc.domain.sequence import SequenceDomain
-from sequence_run_manager_proc.domain.sequencerunstatechange import (
+from sequence_run_manager_proc.domain.events.sequencerunstatechange import (
     Marshaller,
     SequenceRunStateChange,
     AWSEvent,
