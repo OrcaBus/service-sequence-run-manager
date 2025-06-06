@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 
 
 class SequenceViewSetTestCase(TestCase):
-    endpoint = f"/{api_base}sequence"
+    endpoint = f"/{api_base}sequence_run"
 
     def setUp(self):
         Sequence.objects.create(
