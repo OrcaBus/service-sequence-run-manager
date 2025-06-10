@@ -4,7 +4,7 @@ services:
     # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Updates.LTS.html
     # See container image doc https://gallery.ecr.aws/docker/library/postgres for more settings
     image: public.ecr.aws/docker/library/postgres:16
-    container_name: orcabus_db
+    container_name: orcabus_db_test
     restart: always
     environment:
       - POSTGRES_DB=sequence_run_manager
@@ -22,6 +22,6 @@ services:
   localstack:
     # Use a version that align with upper bound of AWS LocalStack LTS
     image: public.ecr.aws/localstack/localstack:3
-    container_name: orcabus_localstack
+    container_name: orcabus_localstack_test
     ports:
       - '4566:4566'

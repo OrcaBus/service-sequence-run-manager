@@ -1,0 +1,48 @@
+services:
+  orcabus_db:
+    # Use a version that align with upper bound of AWS Aurora PostgreSQL LTS
+    # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Updates.LTS.html
+    # See container image doc https://gallery.ecr.aws/docker/library/postgres for more settings
+    image: public.ecr.aws/docker/library/postgres:16
+    container_name: orcabus_db_sequence_run_manager
+    restart: always
+    environment:
+      - POSTGRES_DB=sequence_run_manager
+      - POSTGRES_USER=orcabus
+      - POSTGRES_PASSWORD=orcabus
+    ports:
+      - '5432:5432'
+    command: >
+      bash -c "
+        docker-entrypoint.sh postgres &
+        until pg_isready -U orcabus; do sleep 1; done;
+        psql -U orcabus -d postgres -c 'CREATE ROLE sequence_run_manager WITH LOGIN;' || true;
+        psql -U orcabus -d postgres -c 'GRANT ALL PRIVILEGES ON DATABASE sequence_run_manager TO sequence_run_manager;' || true;
+        wait
+      "
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -d sequence_run_manager -U orcabus']
+      interval: 10s
+      timeout: 60s
+      retries: 5
+      start_period: 90s
+
+  # PORT 8300 ~ sequence-run-manager
+  sequence-run-manager:
+    environment:
+      - DB_HOSTNAME=orcabus_db_sequence_run_manager
+      - DB_PORT=5432
+      - PYTHONUNBUFFERED=1
+    ports:
+      - '8300:8000'
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    depends_on:
+      - orcabus_db
+    healthcheck:
+      test: "curl --fail --silent --write-out 'HTTP CODE : %{http_code}\n' --output /dev/null http://localhost:8000/api/v1"
+      start_period: 30s
+      interval: 10s
+      timeout: 2s
+      retries: 5
