@@ -1,5 +1,5 @@
 import { getDefaultApiGatewayConfiguration } from '@orcabus/platform-cdk-constructs/api-gateway';
-import { StageName } from '@orcabus/platform-cdk-constructs/utils';
+import { StageName } from '@orcabus/platform-cdk-constructs/shared-config/accounts';
 import { VpcLookupOptions } from 'aws-cdk-lib/aws-ec2';
 import { SequenceRunManagerStackProps } from './stack';
 

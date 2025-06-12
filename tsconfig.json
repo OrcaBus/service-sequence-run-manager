@@ -25,7 +25,8 @@
     "typeRoots": [
       "./node_modules/@types"
     ],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowJs": true
   },
   "exclude": [
     "node_modules",

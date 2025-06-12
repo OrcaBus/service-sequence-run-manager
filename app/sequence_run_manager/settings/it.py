@@ -15,6 +15,6 @@ DATABASES = {
         'USER': 'orcabus',
         'PASSWORD': 'orcabus',  # pragma: allowlist-secret
         'HOST': os.getenv('DB_HOSTNAME', 'localhost'),
-        'PORT': os.getenv('DB_PORT', 5432),
+        'PORT': os.getenv('DB_PORT', 5435),
     }
 }
