@@ -22,7 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^9.23.0",
     "@types/jest": "^29.5.14",
-    "@types/node": "^22.13.13",
+    "@types/node": "^24.0.1",
     "aws-cdk": "^2.1006.0",
     "cdk-nag": "^2.35.56",
     "eslint": "^9.23.0",
@@ -36,9 +36,9 @@
     "typescript-eslint": "^8.28.0"
   },
   "dependencies": {
-    "aws-cdk-lib": "^2.192.0",
-    "constructs": "^10.4.2",
+    "@aws-cdk/aws-lambda-python-alpha": "2.192.0-alpha.0",
     "@orcabus/platform-cdk-constructs": "0.0.21",
-    "@aws-cdk/aws-lambda-python-alpha": "2.192.0-alpha.0"
+    "aws-cdk-lib": "^2.192.0",
+    "constructs": "^10.4.2"
   }
 }

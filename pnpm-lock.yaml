@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@aws-cdk/aws-lambda-python-alpha':
         specifier: 2.192.0-alpha.0
-        version: 2.192.0-alpha.0(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)
+        version: 2.192.0-alpha.0(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)
       '@orcabus/platform-cdk-constructs':
         specifier: 0.0.21
-        version: 0.0.21(@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2))(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)
+        version: 0.0.21(@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2))(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)
       aws-cdk-lib:
         specifier: ^2.192.0
-        version: 2.200.1(constructs@10.4.2)
+        version: 2.200.2(constructs@10.4.2)
       constructs:
         specifier: ^10.4.2
         version: 10.4.2
@@ -28,14 +28,14 @@ importers:
         specifier: ^29.5.14
         version: 29.5.14
       '@types/node':
-        specifier: ^22.13.13
+        specifier: ^22.15.31
         version: 22.15.31
       aws-cdk:
         specifier: ^2.1006.0
         version: 2.1018.1
       cdk-nag:
         specifier: ^2.35.56
-        version: 2.36.16(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)
+        version: 2.36.16(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)
       eslint:
         specifier: ^9.23.0
         version: 9.28.0
@@ -605,8 +605,8 @@ packages:
   async@3.2.6:
     resolution: {integrity: sha512-htCUDlxyyCLMgaM3xXg0C0LW2xqfuQ6p05pCEIsXuyQ+a1koYKTuBMzRNwmybfLgvJDMd0r1LTn4+E0Ti6C2AA==}
 
-  aws-cdk-lib@2.200.1:
-    resolution: {integrity: sha512-kLeDtMJPYX3qSAGPONNa3XZk8Z/K3d0As8ui10/Hbv0ohsEsphxSy0xRoxdyj58/hGxOwj1TZsBezMp+TuPPrg==}
+  aws-cdk-lib@2.200.2:
+    resolution: {integrity: sha512-ypmUePgHdl6yLhbdh7RS9ODpwqDSKH+P62tNLh3L7THb4653Io5+dduRcni3nMMnPBJ3dyegHSjAjrZuloeZZA==}
     engines: {node: '>= 14.15.0'}
     peerDependencies:
       constructs: ^10.0.0
@@ -1720,9 +1720,9 @@ snapshots:
 
   '@aws-cdk/asset-node-proxy-agent-v6@2.1.0': {}
 
-  '@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)':
+  '@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)':
     dependencies:
-      aws-cdk-lib: 2.200.1(constructs@10.4.2)
+      aws-cdk-lib: 2.200.2(constructs@10.4.2)
       constructs: 10.4.2
 
   '@aws-cdk/cloud-assembly-schema@44.5.0': {}
@@ -2185,10 +2185,10 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
 
-  '@orcabus/platform-cdk-constructs@0.0.21(@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2))(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)':
+  '@orcabus/platform-cdk-constructs@0.0.21(@aws-cdk/aws-lambda-python-alpha@2.192.0-alpha.0(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2))(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)':
     dependencies:
-      '@aws-cdk/aws-lambda-python-alpha': 2.192.0-alpha.0(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2)
-      aws-cdk-lib: 2.200.1(constructs@10.4.2)
+      '@aws-cdk/aws-lambda-python-alpha': 2.192.0-alpha.0(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2)
+      aws-cdk-lib: 2.200.2(constructs@10.4.2)
       constructs: 10.4.2
 
   '@sinclair/typebox@0.27.8': {}
@@ -2401,7 +2401,7 @@ snapshots:
 
   async@3.2.6: {}
 
-  aws-cdk-lib@2.200.1(constructs@10.4.2):
+  aws-cdk-lib@2.200.2(constructs@10.4.2):
     dependencies:
       '@aws-cdk/asset-awscli-v1': 2.2.237
       '@aws-cdk/asset-node-proxy-agent-v6': 2.1.0
@@ -2507,9 +2507,9 @@ snapshots:
 
   caniuse-lite@1.0.30001722: {}
 
-  cdk-nag@2.36.16(aws-cdk-lib@2.200.1(constructs@10.4.2))(constructs@10.4.2):
+  cdk-nag@2.36.16(aws-cdk-lib@2.200.2(constructs@10.4.2))(constructs@10.4.2):
     dependencies:
-      aws-cdk-lib: 2.200.1(constructs@10.4.2)
+      aws-cdk-lib: 2.200.2(constructs@10.4.2)
       constructs: 10.4.2
 
   chalk@4.1.2:
