@@ -10,7 +10,6 @@ DB_NAME = sequence_run_manager
 DB_USER = orcabus
 DB_PASSWORD = orcabus
 DB_HOST = localhost
-DB_PORT = 5432
 
 # Docker container names
 DB_CONTAINER = orcabus_db_sequence_run_manager
@@ -34,16 +33,15 @@ DB_EXISTS := $(shell docker ps -q -f name=$(DB_CONTAINER))
 up:
 	@echo "Starting fresh database and application..."
 	@$(DC_LOCAL) up --wait -d
-
+	@$(MAKE) s3-load
 
 # Stop and remove only the application container
 down:
 	@echo "Stopping and removing application container..."
-	@$(DC_LOCAL) stop sequence-run-manager
-	@$(DC_LOCAL) rm -f sequence-run-manager
+	@$(DC_LOCAL) down
 
 # Stop all services but keep containers
-stop: down
+stop:
 	@echo "Stopping all services..."
 	@$(DC_LOCAL) stop
 
@@ -61,7 +59,7 @@ clean:
 	@$(DC_TEST) down -v
 
 # Database operations
-.PHONY: db-status db-remove db-reset db-backup db-restore
+.PHONY: db-status db-remove db-reset  s3-dump-download s3-dump-download-if-not-exists db-load-data s3-load db-restore
 
 # Check database status
 db-status:
@@ -81,8 +79,7 @@ db-remove:
 # Reset database (remove and create)
 db-reset: db-remove
 	@echo "Creating fresh database..."
-	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE ROLE sequence_run_manager WITH LOGIN;" || true
-	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME) OWNER sequence_run_manager;"
+	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME) OWNER sequence_run_manager;" || true
 
 # Download all sql dumps from s3
 s3-dump-download:
@@ -99,7 +96,7 @@ s3-dump-download-if-not-exists:
 	fi
 
 # Load data into database from local (be careful, this will overwrite existing data)
-db-load-data: db-reset migrate
+db-load-data:
 	@echo "Loading data into database..."
 
 	@echo "Loading sequence data first into database..."
@@ -147,6 +144,7 @@ makemigrations:
 
 # Run migrations
 migrate:
+	@echo "Running migrations..."
 	@python manage.py migrate
 
 # Load mock data
@@ -208,13 +206,10 @@ ps:
 help:
 	@echo "Available commands:"
 	@echo "\nDevelopment Commands:"
-	@echo "  make up          - Start all services"
-	@echo "  make down        - Stop and remove application container"
-	@echo "  make stop        - Stop all services"
-	@echo "  make restart     - Restart all services"
-	@echo "  make logs        - View logs"
+	@echo "  make up          - Start all services and load data from S3"
+	@echo "  make down        - Stop and remove all containers"
+	@echo "  make stop        - Stop all services but keep containers"
 	@echo "  make clean       - Clean up all containers and volumes"
-	@echo "  make ps          - List running containers"
 	@echo "\nDatabase Commands:"
 	@echo "  make db-status   - Check database status"
 	@echo "  make db-remove   - Remove database"
@@ -223,10 +218,8 @@ help:
 	@echo "  make db-restore  - Restore database from backup"
 	@echo "  make db-load-data - Load data into database from local dump"
 	@echo "  make s3-load     - Download and load data from S3"
-	@echo "  make psql        - Connect to database"
+	@echo "  make db-restore  - Restore database from backup (requires LOCAL_DB_BACKUP_FILE)"
 	@echo "\nDjango Commands:"
-	@echo "  make install     - Install development dependencies"
-	@echo "  make makemigrations - Generate database migrations"
 	@echo "  make migrate     - Apply database migrations"
 	@echo "  make load        - Load mock data"
 	@echo "  make start       - Start development server"

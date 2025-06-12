@@ -11,7 +11,7 @@ services:
       - POSTGRES_USER=orcabus
       - POSTGRES_PASSWORD=orcabus
     ports:
-      - '5432:5432'
+      - '5435:5432'
     command: >
       bash -c "
         docker-entrypoint.sh postgres &
@@ -31,7 +31,7 @@ services:
   sequence-run-manager:
     environment:
       - DB_HOSTNAME=orcabus_db_sequence_run_manager
-      - DB_PORT=5432
+      - DB_PORT=5435
       - PYTHONUNBUFFERED=1
     ports:
       - '8300:8000'
