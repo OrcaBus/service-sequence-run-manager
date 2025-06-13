@@ -3,7 +3,7 @@ import re
 
 import six
 
-from sequence_run_manager_proc.domain import sequencerunstatechange
+from sequence_run_manager_proc.domain.events import sequencerunstatechange
 
 
 class Marshaller:
