@@ -1,6 +1,7 @@
 import base64
 import ulid
 from datetime import datetime, timezone
+import logging
 from rest_framework import status
 from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import action
@@ -8,11 +9,15 @@ from rest_framework.response import Response
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from sequence_run_manager.models import Sequence
+from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation
 from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
 
-from v2_samplesheet_parser.functions.retriever import retrieve_library_from_csv_samplesheet
+from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+ASSOCIATION_STATUS = "ACTIVE"
 
 class SequenceRunActionViewSet(ViewSet):
     """
@@ -81,25 +86,54 @@ class SequenceRunActionViewSet(ViewSet):
             sample_sheet_name=samplesheet_name,
         )
         sequence_run.save()
+        logger.info(f"Sequence run created for instrument run {instrument_run_id}")
 
         # step 2: read the uploaded samplesheet, and encodeed with base64
         samplesheet_content = ''
         with uploaded_samplesheet.open('rb') as f:
             samplesheet_content = f.read()
+        samplesheet_content_json = parse_samplesheet(samplesheet_content)
+
+        # step 3: save samplesheet to database
+        sample_sheet = SampleSheet(
+            sequence_run=sequence_run,
+            sample_sheet_name=samplesheet_name,
+            sample_sheet_content=samplesheet_content_json,
+        )
+        sample_sheet.save()
+        logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}")
+
+        # step 4: construct event bridge detail and emit event to event bridge
         samplesheet_base64 = base64.b64encode(samplesheet_content).decode('utf-8')
-
-        # step 3: construct event bridge detail
         samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64, comment, created_by)
-
-        # step 4: emit event to event bridge
         emit_srm_api_event(samplesheet_change_eb_payload)
+        logger.info(f"Samplesheet change event emitted for sequence run {sequence_run.sequence_run_id}")
 
-        # step 5: check if there is library linking change
-        linking_libraries = retrieve_library_from_csv_samplesheet(samplesheet_content)
-        if linking_libraries:
-            # step 6: emit library linking change event to event bridge
-            library_linking_change_eb_payload = construct_library_linking_change_eb_payload(sequence_run, linking_libraries)
-            emit_srm_api_event(library_linking_change_eb_payload)
+        # step 5: check if there is library linking change, if there is any change, create library associations and emit event to event bridge
+        linking_libraries = list(dict.fromkeys(entry["sample_id"] for entry in samplesheet_content_json.get("bclconvert_data", [])))
+        if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linking_libraries:
+            existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
+            if set(existing_libraries) == set(linking_libraries):
+                logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+                return
+            else:
+                LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+                logger.info(f"Library associations deleted for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+
+                # step 6: create library associations if there is any change
+                for library_id in linking_libraries:
+                    LibraryAssociation.objects.create(
+                        sequence=sequence_run,
+                        library_id=library_id,
+                        association_date=timezone.now(),  # Use timezone-aware datetime
+                        status=ASSOCIATION_STATUS,
+                    )
+                logger.info(f"Library associations created for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+
+                # step 7: emit library linking change event to event bridge
+                library_linking_change_eb_payload = construct_library_linking_change_eb_payload(sequence_run, linking_libraries)
+                emit_srm_api_event(library_linking_change_eb_payload)
+                logger.info(f"Library linking change event emitted for sequence run {sequence_run.sequence_run_id}")
 
         return Response({"detail": "Samplesheet added successfully"}, status=status.HTTP_200_OK)
 

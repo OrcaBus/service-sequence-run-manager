@@ -258,6 +258,8 @@ export class SequenceRunManagerStack extends Stack {
     });
     eventRule.addEventPattern({
       detailType: ['SequenceRunSampleSheetChange'],
+      // @ts-expect-error anything-but is not supported in the type definition
+      source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
       detail: {
         instrumentRunId: [{ exists: true }],
         sequenceRunId: [{ exists: true }],
@@ -289,6 +291,8 @@ export class SequenceRunManagerStack extends Stack {
     });
     eventRule.addEventPattern({
       detailType: ['SequenceRunLibraryLinkingChange'],
+      // @ts-expect-error anything-but is not supported in the type definition
+      source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
       detail: {
         instrumentRunId: [{ exists: true }],
         sequenceRunId: [{ exists: true }],
