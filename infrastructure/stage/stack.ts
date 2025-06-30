@@ -26,6 +26,13 @@ import {
   OrcaBusApiGateway,
   OrcaBusApiGatewayProps,
 } from '@orcabus/platform-cdk-constructs/api-gateway';
+import { DatabaseCluster } from 'aws-cdk-lib/aws-rds';
+import { StringParameter } from 'aws-cdk-lib/aws-ssm';
+import {
+  DB_CLUSTER_ENDPOINT_HOST_PARAMETER_NAME,
+  DB_CLUSTER_IDENTIFIER,
+  DB_CLUSTER_RESOURCE_ID_PARAMETER_NAME,
+} from '@orcabus/platform-cdk-constructs/shared-config/database';
 
 export interface SequenceRunManagerStackProps {
   lambdaSecurityGroupName: string;
@@ -46,10 +53,11 @@ export class SequenceRunManagerStack extends Stack {
   private readonly lambdaSG: ISecurityGroup;
   private readonly mainBus: IEventBus;
 
+  private readonly SEQUENCE_RUN_MANAGER_DB_NAME = 'sequence_run_manager';
+  private readonly SEQUENCE_RUN_MANAGER_DB_USER = 'sequence_run_manager';
+
   constructor(scope: Construct, id: string, props: cdk.StackProps & SequenceRunManagerStackProps) {
     super(scope, id, props);
-
-    const secretId: string = this.formatDbSecretManagerName('sequence_run_manager');
 
     this.mainBus = EventBus.fromEventBusName(this, 'OrcaBusMain', props.mainBusName);
     this.vpc = Vpc.fromLookup(this, 'MainVpc', props.vpcProps);
@@ -80,8 +88,20 @@ export class SequenceRunManagerStack extends Stack {
       ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMReadOnlyAccess')
     );
 
-    const dbSecret = aws_secretsmanager.Secret.fromSecretNameV2(this, 'DbSecret', secretId);
-    dbSecret.grantRead(this.lambdaRole);
+    // Grab the database cluster
+    const clusterResourceIdentifier = StringParameter.valueForStringParameter(
+      this,
+      DB_CLUSTER_RESOURCE_ID_PARAMETER_NAME
+    );
+    const clusterHostEndpoint = StringParameter.valueForStringParameter(
+      this,
+      DB_CLUSTER_ENDPOINT_HOST_PARAMETER_NAME
+    );
+    const dbCluster = DatabaseCluster.fromDatabaseClusterAttributes(this, 'OrcabusDbCluster', {
+      clusterIdentifier: DB_CLUSTER_IDENTIFIER,
+      clusterResourceIdentifier: clusterResourceIdentifier,
+    });
+    dbCluster.grantConnect(this.lambdaRole, this.SEQUENCE_RUN_MANAGER_DB_USER);
 
     const bsshTokenSecret = aws_secretsmanager.Secret.fromSecretNameV2(
       this,
@@ -93,7 +113,9 @@ export class SequenceRunManagerStack extends Stack {
     this.lambdaEnv = {
       DJANGO_SETTINGS_MODULE: 'sequence_run_manager.settings.aws',
       EVENT_BUS_NAME: this.mainBus.eventBusName,
-      SECRET_ID: secretId,
+      PG_HOST: clusterHostEndpoint,
+      PG_USER: this.SEQUENCE_RUN_MANAGER_DB_USER,
+      PG_DB_NAME: this.SEQUENCE_RUN_MANAGER_DB_NAME,
       BASESPACE_ACCESS_TOKEN_SECRET_ID: props.bsshTokenSecretName,
     };
 
