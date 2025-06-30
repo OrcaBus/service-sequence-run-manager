@@ -1,21 +1,14 @@
 import { getDefaultApiGatewayConfiguration } from '@orcabus/platform-cdk-constructs/api-gateway';
 import { StageName } from '@orcabus/platform-cdk-constructs/shared-config/accounts';
-import { VpcLookupOptions } from 'aws-cdk-lib/aws-ec2';
+import {
+  VPC_LOOKUP_PROPS,
+  SHARED_SECURITY_GROUP_NAME,
+} from '@orcabus/platform-cdk-constructs/shared-config/networking';
+import { EVENT_BUS_NAME } from '@orcabus/platform-cdk-constructs/shared-config/event-bridge';
 import { SequenceRunManagerStackProps } from './stack';
 
 export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunManagerStackProps => {
-  // upstream infra: vpc
-  const vpcName = 'main-vpc';
-  const vpcStackName = 'networking';
-  const vpcProps: VpcLookupOptions = {
-    vpcName: vpcName,
-    tags: {
-      Stack: vpcStackName,
-    },
-  };
-
-  const computeSecurityGroupName = 'OrcaBusSharedComputeSecurityGroup';
-  const eventBusName = 'OrcaBusMain';
+  // config bssh token secret name
   const basespaceAccessTokenSecretName = '/manual/BaseSpaceAccessTokenSecret'; // pragma: allowlist secret
 
   // slackTopicNameDict and orcabusUIBaseUrlDict are used to map the stage to the correct slack topic and orcabus UI base URL
@@ -32,9 +25,9 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
   };
 
   return {
-    vpcProps,
-    lambdaSecurityGroupName: computeSecurityGroupName,
-    mainBusName: eventBusName,
+    vpcProps: VPC_LOOKUP_PROPS,
+    lambdaSecurityGroupName: SHARED_SECURITY_GROUP_NAME,
+    mainBusName: EVENT_BUS_NAME,
     apiGatewayCognitoProps: {
       ...getDefaultApiGatewayConfiguration(stage),
       apiName: 'SequenceRunManager',
