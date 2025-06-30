@@ -76,7 +76,12 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict  ):
     sample_sheet_contents = bssh_srv.get_all_sample_sheet_from_bssh_run_files(api_url)
 
     for sample_sheet_content in sample_sheet_contents:
-    # Convert content to JSON format with v2_samplesheet_to_json function
+        # check if the sample sheet already exists
+        if SampleSheet.objects.filter(sequence=sequence, sample_sheet_name=sample_sheet_content['name']).exists():
+            logger.info(f"Sample sheet {sample_sheet_content['name']} already exists for sequence {sequence.sequence_run_id}")
+            continue
+
+        # Convert content to JSON format with v2_samplesheet_to_json function
         content_dict = parse_samplesheet(sample_sheet_content['content'])
 
         SampleSheet.objects.create(
