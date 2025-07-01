@@ -59,6 +59,35 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
         created_by=event_detail["comment"]["created_by"],
     )
 
+def create_sequence_sample_sheet_from_reconversion_event(payload: dict):
+    """
+    Check if the sample sheet for a sequence exists;
+    if not, create it
+    """
+    assert payload["id"] is not None, "sequence run id is required"
+    assert payload["apiUrl"] is not None, "api url is required"
+    assert payload["sampleSheetName"] is not None, "sample sheet name is required"
+
+    sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
+    if not sequence_run:
+        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet")
+        raise ValueError(f"Sequence run {payload['id']} not found")
+
+    api_url = payload["apiUrl"]
+    sample_sheet_name = payload["sampleSheetName"]
+    bssh_srv = BSSHService()
+    sample_sheet_content = bssh_srv.get_sample_sheet_from_bssh_run_files(api_url, sample_sheet_name)
+    if not sample_sheet_content:
+        logger.error(f"Sample sheet {sample_sheet_name} not found for sequence {sequence_run.sequence_run_id}")
+        raise ValueError(f"Sample sheet {sample_sheet_name} not found")
+
+    content_dict = parse_samplesheet(sample_sheet_content)
+
+    SampleSheet.objects.create(
+        sequence=sequence_run,
+        sample_sheet_name=sample_sheet_name,
+        sample_sheet_content=content_dict,
+    )
 
 @transaction.atomic
 def create_sequence_sample_sheet(sequence: Sequence, payload: dict  ):

@@ -116,6 +116,10 @@ def event_handler(event, context):
         sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
         sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
+    if sequence_domain.is_reconversion_sequence:
+        sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
+        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
+
     # Detect SequenceRunStatusChange
     if sequence_domain.status_has_changed:
         try:
