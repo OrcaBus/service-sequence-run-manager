@@ -7,7 +7,7 @@ from libumccr.aws import libssm
 
 from sequence_run_manager.models import Sequence
 from sequence_run_manager.models.sequence import SequenceStatus
-from sequence_run_manager_proc.domain.sequencerunstatechange import (
+from sequence_run_manager_proc.domain.events.sequencerunstatechange import (
     SequenceRunStateChange,
     AWSEvent,
     Marshaller,
@@ -28,6 +28,9 @@ class SequenceDomain:
     #  flag to indicate if state or status has changed
     state_has_changed: bool = False # reference to State model (uploading, running, new, complete, analyzing, pendinganalysis, ...)
     status_has_changed: bool = False # reference to Sequence model (STARTED, SUCCEEDED, FAILED, ABORTED)
+
+    # flag to indicate if sequence is re-conversion (via BSSH) with an updated SampleSheet
+    is_reconversion_sequence: bool = False
 
     @property
     def namespace(self) -> str:

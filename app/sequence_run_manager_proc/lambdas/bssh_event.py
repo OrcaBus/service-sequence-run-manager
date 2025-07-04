@@ -113,9 +113,12 @@ def event_handler(event, context):
 
     # Check or create sequence run libraries linking and sample sheet when events uploaded finished (terminal status)
     if sequence_domain.status_has_changed and SequenceStatus.is_terminal(sequence_domain.sequence.status):
-        sample_sheet_srv.check_or_create_sequence_sample_sheet(event_details)
-        sequence_library_srv.check_or_create_sequence_run_libraries_linking(event_details)
+        sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
+        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
+    if sequence_domain.is_reconversion_sequence:
+        sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
+        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
     # Detect SequenceRunStatusChange
     if sequence_domain.status_has_changed:

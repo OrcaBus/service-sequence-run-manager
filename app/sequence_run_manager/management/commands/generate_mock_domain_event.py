@@ -6,7 +6,7 @@ from django.db.models import QuerySet
 from sequence_run_manager.models import Sequence
 from sequence_run_manager.tests.factories import TestConstant, SequenceFactory
 from sequence_run_manager_proc.domain.sequence import SequenceDomain
-from sequence_run_manager_proc.domain.sequencerunstatechange import Marshaller
+from sequence_run_manager_proc.domain.events.sequencerunstatechange import Marshaller
 
 
 class Command(BaseCommand):

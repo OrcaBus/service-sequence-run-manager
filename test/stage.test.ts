@@ -111,17 +111,4 @@ function applyNagSuppression(stack: Stack) {
     ],
     true
   );
-
-  NagSuppressions.addResourceSuppressionsByPath(
-    stack,
-    `/SequenceRunManagerStack/SrmTempLinkingDataBucket/Resource`,
-    [
-      {
-        id: 'AwsSolutions-S1',
-        reason:
-          'S3 Bucket has server access logs disabled as temporary linking data files are not accessed by the API, only by the enrichment lambda function',
-      },
-    ],
-    true
-  );
 }

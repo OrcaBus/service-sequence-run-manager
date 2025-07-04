@@ -68,6 +68,10 @@ class SequenceRunProcUnitTestCase(TestCase):
 
         when(mock_bssh_service).get_run_details(...).thenReturn(mock_run_details)
         when(mock_bssh_service).get_sample_sheet_from_bssh_run_files(...).thenReturn(mock_sample_sheet)
+        when(mock_bssh_service).get_all_sample_sheet_from_bssh_run_files(...).thenReturn([{
+            'name': 'SampleSheet.csv',
+            'content': mock_sample_sheet
+        }])
 
         # Use patch to replace the BSSHService class with our mock
         patcher_seq = patch('sequence_run_manager_proc.services.sequence_srv.BSSHService', return_value=mock_bssh_service)
