@@ -1,0 +1,22 @@
+{
+  "version": "0",
+  "id": "12345678-90ab-cdef-1234-567890abcdef",
+  "detail-type": "SequenceRunSampleSheetChange",
+  "source": "orcabus.sequencerunmanager",
+  "account": "000000000000",
+  "time": "2024-04-27T03:45:02.113245Z",
+  "region": "ap-southeast-2",
+  "resources": [],
+  "detail": {
+    "instrumentRunId": "123456_A7890_1234_ABCDEFGH",
+    "sequenceRunId": "r.1234567890abcdefghijklmn",
+    "timeStamp": "2024-04-27T03:45:02.113245Z",
+    "sampleSheetName": "sampleSheet_v2.csv",
+    "samplesheetbase64gz": "base64_encoded_samplesheet........",
+    "comment": {
+      "comment": "comment",
+      "created_by": "user",
+      "created_at": "2024-04-27T03:45:02.113245Z"
+    }
+  }
+}

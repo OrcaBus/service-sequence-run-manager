@@ -78,12 +78,15 @@ class Sequence(OrcaBusBaseModel):
     # NOTE: we use this to retrieve further details for icav2 bssh event
     # for reference: https://github.com/umccr/orcabus/pull/748#issuecomment-2516246960
     class Meta:
-        constraints = [
-            models.CheckConstraint(check=models.Q(run_folder_path__isnull=False) | models.Q(v1pre3_id__isnull=False,
-                                                                                            ica_project_id__isnull=False,
-                                                                                            api_url__isnull=False),
-                                   name='check_run_folder_path_or_bssh_keys_not_null')
-        ]
+
+        # remove this constraint as we don't have run_folder_path for fake sequence runs
+        # constraints = [
+        #     models.CheckConstraint(check=models.Q(run_folder_path__isnull=False) | models.Q(v1pre3_id__isnull=False,
+        #                                                                                     ica_project_id__isnull=False,
+        #                                                                                     api_url__isnull=False),
+        #                            name='check_run_folder_path_or_bssh_keys_not_null')
+        # ]
+        pass
 
     orcabus_id = OrcaBusIdField(primary_key=True, prefix='seq')
 

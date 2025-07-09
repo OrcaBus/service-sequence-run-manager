@@ -39,3 +39,55 @@ class SequenceRunCountByStatusSerializer(serializers.Serializer):
     failed = serializers.IntegerField()
     aborted = serializers.IntegerField()
     resolved = serializers.IntegerField()
+
+
+class SequenceRunGroupByInstrumentRunIdSerializer(serializers.Serializer):
+    instrument_run_id = serializers.CharField(help_text="The instrument run ID")
+    start_time = serializers.DateTimeField(help_text="Earliest start time of sequences in this group")
+    end_time = serializers.DateTimeField(help_text="Latest end time of sequences in this group")
+    count = serializers.IntegerField(help_text="Number of sequences in this group")
+    items = SequenceRunMinSerializer(many=True)
+
+    class Meta(OrcabusIdSerializerMetaMixin):
+        model = Sequence
+        fields = ["instrument_run_id", "start_time", "end_time", "count", "items"]
+
+    def get_schema(self):
+        """
+        OpenAPI schema for this serializer
+        """
+
+        # Return array schema
+        return {
+            "type": "array",
+            "items": self._get_single_item_schema()
+        }
+
+    def _get_single_item_schema(self):
+        """
+        Generate schema for a single item (without array wrapper)
+        """
+        return {
+                        "type": "object",
+                        "properties": {
+                            "instrumentRunId": {"type": "string"},
+                            "startTime": {"type": "string", "format": "date-time"},
+                            "endTime": {"type": "string", "format": "date-time"},
+                            "count": {"type": "integer"},
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "orcabusId": {"type": "string"},
+                                        "instrumentRunId": {"type": "string"},
+                                        "sequenceRunId": {"type": "string"},
+                                        "experimentName": {"type": "string"},
+                                        "startTime": {"type": "string", "format": "date-time"},
+                                        "endTime": {"type": "string", "format": "date-time"},
+                                        "status": {"type": "string"}
+                                    }
+                                }
+                            }
+                        }
+                    }

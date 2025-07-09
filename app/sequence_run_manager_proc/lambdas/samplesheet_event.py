@@ -33,10 +33,14 @@ def event_handler(event, context):
     "detail": {
         "instrumentRunId": "250328_A01052_0258_AHFGM7DSXF",
         "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id
-        "sequenceOrcabusId": "seq.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",
         "sampleSheetName": "sampleSheet_v2.csv",
-        "samplesheetbase64gz": "base64_encoded_samplesheet........"
+        "samplesheetbase64gz": "base64_encoded_samplesheet........",
+        "comment": {
+            "comment": "comment",
+            "created_by": "user",
+            "created_at": "2025-03-01T00:00:00.000000+00:00"
+        }
         }
     }
     """

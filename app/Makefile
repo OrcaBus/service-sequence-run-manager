@@ -163,6 +163,18 @@ openapi:
 validate: openapi
 	@python -m openapi_spec_validator orcabus.sequencerunmanager.openapi.yaml
 
+schema-gen: schema-gen-srsc schema-gen-srss schema-gen-srll
+
+schema-gen-srsc:
+	@datamodel-codegen --input ../docs/events/SequenceRunStateChange/SequenceRunStateChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srsc.py
+
+schema-gen-srss:
+	@datamodel-codegen --input ../docs/events/SequenceRunSampleSheetChange/SequenceRunSampleSheetChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srssc.py
+
+schema-gen-srll:
+	@datamodel-codegen --input ../docs/events/SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srllc.py
+
+
 # Database commands
 .PHONY: psql
 
@@ -229,6 +241,7 @@ help:
 	@echo "  make lint-fix    - Fix code formatting"
 	@echo "  make openapi     - Generate OpenAPI specification"
 	@echo "  make validate    - Validate OpenAPI specification"
+	@echo "  make schema-gen  - Generate schema from events"
 	@echo "\nTest Commands:"
 	@echo "  make test        - Run full test suite"
 	@echo "  make test-up     - Start test environment"

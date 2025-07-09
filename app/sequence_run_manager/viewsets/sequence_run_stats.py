@@ -58,8 +58,9 @@ class SequenceStatsViewSet(GenericViewSet):
         }
 
         for item in status_counts:
-            status = item['status'].lower()
-            counts[status] = item['count']
+            if item['status'] is not None:
+                status = item['status'].lower()
+                counts[status] = item['count']
 
         return Response(counts, status=200)
 

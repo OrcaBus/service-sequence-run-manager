@@ -7,11 +7,7 @@ from libumccr.aws import libssm
 
 from sequence_run_manager.models import Sequence
 from sequence_run_manager.models.sequence import SequenceStatus
-from sequence_run_manager_proc.domain.events.sequencerunstatechange import (
-    SequenceRunStateChange,
-    AWSEvent,
-    Marshaller,
-)
+from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange, AWSEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -81,7 +77,7 @@ class SequenceDomain:
         domain_event_with_envelope = self.to_event_with_envelope()
         entry = {
             "Detail": json.dumps(
-                Marshaller.marshall(domain_event_with_envelope.detail)
+                SequenceRunStateChange.model_validate_json(domain_event_with_envelope.detail)
             ),
             "DetailType": domain_event_with_envelope.detail_type,
             "Resources": [],

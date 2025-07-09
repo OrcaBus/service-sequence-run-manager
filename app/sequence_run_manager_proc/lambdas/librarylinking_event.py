@@ -31,7 +31,6 @@ def event_handler(event, context):
     "detail": {
         "instrumentRunId": "250328_A01052_0258_AHFGM7DSXF",
         "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id
-        "sequenceOrcabusId": "seq.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",
         "linkedLibraries": [
                 "L2000000",

@@ -82,7 +82,7 @@ def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):
     This function is used to check or create sequence run libraries linking from event details(SRLLC)
     event detail example:
     {
-    "sequenceOrcabusId": "seq.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
+    "sequenceRunId": "r.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
     "linkedLibraries": [
                 "L2000000",
                 "L2000001",
@@ -90,13 +90,13 @@ def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):
                 ]
     }
     """
-    assert event_detail["sequenceOrcabusId"] is not None, "sequence orcabus id is required"
+    assert event_detail["sequenceRunId"] is not None, "sequence run id is required"
     assert event_detail["linkedLibraries"] is not None, "linked libraries are required"
 
-    sequence_run = Sequence.objects.get(orcabus_id=event_detail["sequenceOrcabusId"])
+    sequence_run = Sequence.objects.get(sequence_run_id=event_detail["sequenceRunId"])
     if not sequence_run:
-        logger.error(f"Sequence run {event_detail['sequenceOrcabusId']} not found when checking or creating sequence run libraries linking")
-        raise ValueError(f"Sequence run {event_detail['sequenceOrcabusId']} not found")
+        logger.error(f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence run libraries linking")
+        raise ValueError(f"Sequence run {event_detail['sequenceRunId']} not found")
 
     linked_libraries = event_detail["linkedLibraries"]
 

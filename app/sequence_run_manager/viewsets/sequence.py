@@ -26,7 +26,7 @@ class SequenceViewSet(GenericViewSet):
         Get all sequence data by instrument run id
         """
         instrument_run_id = kwargs.get('instrument_run_id')
-        sequences = Sequence.objects.filter(instrument_run_id=instrument_run_id).filter(status__isnull=False) # filter out fake sequence runs
+        sequences = Sequence.objects.filter(instrument_run_id=instrument_run_id)
         serializer = SequenceRunSerializer(sequences, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

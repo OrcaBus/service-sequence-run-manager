@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$id": "https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunSampleSheetChange.schema.json",
+  "description": "EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunSampleSheetChange",
+  "title": "AWSEvent",
+  "definitions": {
+    "SequenceRunSampleSheetChange": {
+      "type": "object",
+      "required": ["instrumentRunId", "timeStamp", "sampleSheetName", "samplesheetbase64gz"],
+      "properties": {
+        "instrumentRunId": {
+          "type": "string"
+        },
+        "sequenceRunId": {
+          "type": "string"
+        },
+        "timeStamp": {
+          "type": "string"
+        },
+        "sampleSheetName": {
+          "type": "string"
+        },
+        "samplesheetbase64gz": {
+          "type": "string"
+        },
+        "comment": {
+          "$ref": "#/definitions/Comment"
+        }
+      }
+    },
+    "Comment": {
+      "type": "object",
+      "required": ["comment", "created_by", "created_at"],
+      "properties": {
+        "comment": {
+          "type": "string"
+        },
+        "created_by": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "string"
+    },
+    "time": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "account": {
+      "type": "string"
+    },
+    "detail-type": {
+      "type": "string"
+    },
+    "detail": {
+      "$ref": "#/definitions/SequenceRunSampleSheetChange"
+    }
+  },
+  "required": ["detail", "detail-type", "source"]
+}

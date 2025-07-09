@@ -1,6 +1,6 @@
 import base64
 import ulid
-from datetime import datetime, timezone
+from django.utils import timezone
 import logging
 from rest_framework import status
 from rest_framework.viewsets import ViewSet
@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
-from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation
+from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation, Comment
 from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
@@ -55,9 +55,11 @@ class SequenceRunActionViewSet(ViewSet):
         },
         responses={
             200: OpenApiResponse(description="Sample sheet added successfully"),
-            400: OpenApiResponse(description="Missing required fields or invalid input")
+            400: OpenApiResponse(description="Missing required fields or invalid input"),
+            500: OpenApiResponse(description="Internal server error")
         },
-        description="Creating a fake sequence run and associate a samplesheet to it by emitting an SRSSC and/or SRLLC event to EventBridge (Orcabus)"
+        description="Creating a fake sequence run and associate a samplesheet to it by emitting an SRSSC and/or SRLLC event to EventBridge (Orcabus)",
+        tags=["Sequence Run Actions"]
     )
     @action(detail=False,methods=['post'],url_name='add_samplesheet',url_path='add_samplesheet')
     def add_samplesheet(self, request, *args, **kwargs):
@@ -84,6 +86,7 @@ class SequenceRunActionViewSet(ViewSet):
             instrument_run_id=instrument_run_id,
             sequence_run_id="r."+ulid.new().str,
             sample_sheet_name=samplesheet_name,
+            start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
         )
         sequence_run.save()
         logger.info(f"Sequence run created for instrument run {instrument_run_id}")
@@ -92,35 +95,56 @@ class SequenceRunActionViewSet(ViewSet):
         samplesheet_content = ''
         with uploaded_samplesheet.open('rb') as f:
             samplesheet_content = f.read()
-        samplesheet_content_json = parse_samplesheet(samplesheet_content)
+
+        # Decode bytes to string for parsing
+        samplesheet_content_str = samplesheet_content.decode('utf-8')
+
+        try:
+            samplesheet_content_json = parse_samplesheet(samplesheet_content_str)
+        except Exception as e:
+            logger.error(f"Failed to parse samplesheet: {e}")
+            return Response({"detail": f"Invalid samplesheet format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         # step 3: save samplesheet to database
         sample_sheet = SampleSheet(
-            sequence_run=sequence_run,
+            sequence=sequence_run,
             sample_sheet_name=samplesheet_name,
             sample_sheet_content=samplesheet_content_json,
         )
         sample_sheet.save()
-        logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}")
+
+        comment_obj = Comment(
+            association_id=sample_sheet.orcabus_id,
+            comment=comment,
+            created_by=created_by,
+        )
+        comment_obj.save()
+        logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}, and comment {comment_obj.orcabus_id} saved")
 
         # step 4: construct event bridge detail and emit event to event bridge
         samplesheet_base64 = base64.b64encode(samplesheet_content).decode('utf-8')
         samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64, comment, created_by)
-        emit_srm_api_event(samplesheet_change_eb_payload)
-        logger.info(f"Samplesheet change event emitted for sequence run {sequence_run.sequence_run_id}")
+
+        try:
+            emit_srm_api_event(samplesheet_change_eb_payload)
+            logger.info(f"Samplesheet change event emitted for sequence run {sequence_run.sequence_run_id}")
+        except Exception as e:
+            logger.error(f"Failed to emit samplesheet change event: {e}")
+            # Continue processing even if event emission fails
 
         # step 5: check if there is library linking change, if there is any change, create library associations and emit event to event bridge
         linking_libraries = list(dict.fromkeys(entry["sample_id"] for entry in samplesheet_content_json.get("bclconvert_data", [])))
-        if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linking_libraries:
+        if linking_libraries:
             existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
-            if set(existing_libraries) == set(linking_libraries):
-                logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
-                return
-            else:
-                LibraryAssociation.objects.filter(sequence=sequence_run).delete()
-                logger.info(f"Library associations deleted for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
 
+            if not existing_libraries or set(existing_libraries) != set(linking_libraries):
                 # step 6: create library associations if there is any change
+                if not existing_libraries:
+                    logger.info(f"No library associations found for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+                else:
+                    LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+                    logger.info(f"Library associations deleted for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+
                 for library_id in linking_libraries:
                     LibraryAssociation.objects.create(
                         sequence=sequence_run,
@@ -132,8 +156,18 @@ class SequenceRunActionViewSet(ViewSet):
 
                 # step 7: emit library linking change event to event bridge
                 library_linking_change_eb_payload = construct_library_linking_change_eb_payload(sequence_run, linking_libraries)
-                emit_srm_api_event(library_linking_change_eb_payload)
-                logger.info(f"Library linking change event emitted for sequence run {sequence_run.sequence_run_id}")
+                try:
+                    emit_srm_api_event(library_linking_change_eb_payload)
+                    logger.info(f"Library linking change event emitted for sequence run {sequence_run.sequence_run_id}")
+                except Exception as e:
+                    logger.error(f"Failed to emit library linking change event: {e}")
+                    # Continue processing even if event emission fails
+
+            else:
+                logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linking_libraries}")
+
+        else:
+            logger.info(f"No library linking found in samplesheet for sequence run {sequence_run.sequence_run_id}")
 
         return Response({"detail": "Samplesheet added successfully"}, status=status.HTTP_200_OK)
 
@@ -146,14 +180,13 @@ def construct_samplesheet_change_eb_payload(sequence_run: Sequence, samplesheet_
         "eventType": "SequenceRunSampleSheetChange",
         "instrumentRunId": sequence_run.instrument_run_id,
         "sequenceRunId": sequence_run.sequence_run_id,
-        "sequenceOrcabusId": sequence_run.orcabus_id,
-        "timeStamp": datetime.now(),
+        "timeStamp": timezone.now(),
         "sampleSheetName": sequence_run.sample_sheet_name,
         "samplesheetbase64gz": samplesheet_base64,
         "comment":{
             "comment": comment,
             "created_by": created_by,
-            "created_at": datetime.now()
+            "created_at": timezone.now()
         }
     }
 
@@ -166,7 +199,6 @@ def construct_library_linking_change_eb_payload(sequence_run: Sequence, linked_l
         "eventType": "SequenceRunLibraryLinkingChange",
         "instrumentRunId": sequence_run.instrument_run_id,
         "sequenceRunId": sequence_run.sequence_run_id,
-        "sequenceOrcabusId": sequence_run.orcabus_id,
-        "timeStamp": datetime.now(),
+        "timeStamp": timezone.now(),
         "linkedLibraries": linked_libraries,
     }
