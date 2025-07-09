@@ -40,7 +40,6 @@ definitions:
       - runDataUri
       - sampleSheetName
       - startTime
-      - endTime
       - status
     properties:
       id:

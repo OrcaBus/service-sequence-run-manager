@@ -35,11 +35,10 @@ def event_handler(event, context):
         "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",
         "sampleSheetName": "sampleSheet_v2.csv",
-        "samplesheetbase64gz": "base64_encoded_samplesheet........",
+        "samplesheetBase64gz": "base64_encoded_samplesheet_gzip........",
         "comment": {
             "comment": "comment",
-            "created_by": "user",
-            "created_at": "2025-03-01T00:00:00.000000+00:00"
+            "createdBy": "user",
         }
         }
     }

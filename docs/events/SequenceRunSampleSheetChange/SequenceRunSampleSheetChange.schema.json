@@ -6,7 +6,7 @@
   "definitions": {
     "SequenceRunSampleSheetChange": {
       "type": "object",
-      "required": ["instrumentRunId", "timeStamp", "sampleSheetName", "samplesheetbase64gz"],
+      "required": ["instrumentRunId", "timeStamp", "sampleSheetName", "samplesheetBase64gz"],
       "properties": {
         "instrumentRunId": {
           "type": "string"
@@ -30,7 +30,7 @@
     },
     "Comment": {
       "type": "object",
-      "required": ["comment", "created_by", "created_at"],
+      "required": ["comment", "created_by"],
       "properties": {
         "comment": {
           "type": "string"

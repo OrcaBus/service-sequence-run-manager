@@ -5,7 +5,6 @@ import logging
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
-from sequence_run_manager_proc.services.sample_sheet_srv import get_sample_sheet_libraries
 logger = logging.getLogger(__name__)
 
 ASSOCIATION_STATUS = "ACTIVE"
@@ -60,8 +59,17 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
     linked_libraries = []
     sample_sheet = SampleSheet.objects.get(sequence=sequence_run)
     if sample_sheet:
-        linked_libraries = get_sample_sheet_libraries(sample_sheet)
+        logger.info(f"Sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from sample sheet")
+        bclconvert_data = sample_sheet.sample_sheet_content.get("bclconvert_data", [])
+        # return empty list if no bclconvert_data
+        if not bclconvert_data:
+            logger.info(f"No libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}")
+        else:
+            # remove repeated value
+            linked_libraries = list(dict.fromkeys(entry["sample_id"] for entry in bclconvert_data))
+            logger.info(f"Libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
     else:
+        logger.info(f"No sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from bssh")
         bssh_srv = BSSHService()
         run_details = bssh_srv.get_run_details(sequence_run.api_url)
         linked_libraries = BSSHService.get_libraries_from_run_details(run_details)
@@ -70,6 +78,7 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
     if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linked_libraries:
         existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
         if set(existing_libraries) == set(linked_libraries):
+            logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
             return
         else:
             LibraryAssociation.objects.filter(sequence=sequence_run).delete()

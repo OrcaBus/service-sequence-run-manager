@@ -3,12 +3,12 @@ from django.utils import timezone
 import ulid
 import logging
 import base64
+import gzip
 
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.models.comment import Comment
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
-from sequence_run_manager_proc.services.sequence_library_srv import ASSOCIATION_STATUS
 from sequence_run_manager_proc.services.sequence_library_srv import update_sequence_run_libraries_linking
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
@@ -36,21 +36,21 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
 
     assert event_detail["instrumentRunId"] is not None, "instrument run id is required"
     assert event_detail["sampleSheetName"] is not None, "sample sheet name is required"
-    assert event_detail["samplesheetbase64gz"] is not None, "sample sheet base64 is required"
+    assert event_detail["samplesheetBase64gz"] is not None, "sample sheet base64 is required"
 
     sequence_run = None
     instrument_run_id = event_detail["instrumentRunId"]
     samplesheet_name = event_detail["sampleSheetName"]
 
     #  step 1: check if the sequence run exists, create a fake sequence run if not
-    if event_detail["sequenceRunId"]:
+    if event_detail.get("sequenceRunId") is not None:
         sequence_run = Sequence.objects.get(sequence_run_id=event_detail["sequenceRunId"])
         if not sequence_run:
             logger.error(f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence sample sheet from event")
             raise ValueError(f"Sequence run {event_detail['sequenceRunId']} not found")
     else:
         # create a fake sequence run
-        sequence_run = Sequence(
+        sequence_run = Sequence.objects.create(
             instrument_run_id=instrument_run_id,
             sequence_run_id="r."+ulid.new().str,
             sample_sheet_name=samplesheet_name,
@@ -59,8 +59,8 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
         logger.info(f"Created a fake sequence run {sequence_run.sequence_run_id} for instrument run {instrument_run_id}")
 
 
-    content_base64 = event_detail["samplesheetbase64gz"]
-    content_dict = parse_samplesheet(base64.b64decode(content_base64))
+    content_base64_gz = event_detail["samplesheetBase64gz"]
+    content_dict = parse_samplesheet(gzip.decompress(base64.b64decode(content_base64_gz)).decode('utf-8'))
 
     # step 2: create a sample sheet for the sequence run
     sample_sheet = SampleSheet.objects.create(
@@ -71,11 +71,11 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
 
     # comment object needed for sample sheet, refer: https://github.com/umccr/orcabus/issues/947
     # step 3: create a comment for the sample sheet
-    if event_detail["comment"]:
+    if event_detail.get("comment") is not None:
         Comment.objects.create(
             association_id=sample_sheet.orcabus_id,
             comment=event_detail["comment"]["comment"],
-            created_by=event_detail["comment"]["created_by"],
+            created_by=event_detail["comment"]["createdBy"],
         )
         logger.info(f"Created a comment for sample sheet {samplesheet_name}")
     else:

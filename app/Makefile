@@ -33,7 +33,6 @@ DB_EXISTS := $(shell docker ps -q -f name=$(DB_CONTAINER))
 up:
 	@echo "Starting fresh database and application..."
 	@$(DC_LOCAL) up --wait -d
-	@$(MAKE) s3-load
 
 # Stop and remove only the application container
 down:
@@ -163,15 +162,18 @@ openapi:
 validate: openapi
 	@python -m openapi_spec_validator orcabus.sequencerunmanager.openapi.yaml
 
-schema-gen: schema-gen-srsc schema-gen-srss schema-gen-srll
+schema-gen: schema-gen-srsc schema-gen-srssc schema-gen-srllc
 
 schema-gen-srsc:
+	@echo "Generating SRSC schema..."
 	@datamodel-codegen --input ../docs/events/SequenceRunStateChange/SequenceRunStateChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srsc.py
 
-schema-gen-srss:
+schema-gen-srssc:
+	@echo "Generating SRSSC schema..."
 	@datamodel-codegen --input ../docs/events/SequenceRunSampleSheetChange/SequenceRunSampleSheetChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srssc.py
 
-schema-gen-srll:
+schema-gen-srllc:
+	@echo "Generating SRLLC schema..."
 	@datamodel-codegen --input ../docs/events/SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srllc.py
 
 

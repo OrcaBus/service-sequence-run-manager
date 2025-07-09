@@ -76,9 +76,7 @@ class SequenceDomain:
         """Convert Domain event with envelope to Entry dict struct of PutEvent API"""
         domain_event_with_envelope = self.to_event_with_envelope()
         entry = {
-            "Detail": json.dumps(
-                SequenceRunStateChange.model_validate_json(domain_event_with_envelope.detail)
-            ),
+            "Detail": domain_event_with_envelope.detail.model_dump_json(),
             "DetailType": domain_event_with_envelope.detail_type,
             "Resources": [],
             "Source": domain_event_with_envelope.source,
