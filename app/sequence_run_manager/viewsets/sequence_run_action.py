@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation, Comment
+from sequence_run_manager.models.comment import TargetType
 from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
@@ -115,7 +116,8 @@ class SequenceRunActionViewSet(ViewSet):
         sample_sheet.save()
 
         comment_obj = Comment(
-            association_id=sample_sheet.orcabus_id,
+            target_id=sample_sheet.orcabus_id,
+            target_type=TargetType.SAMPLE_SHEET,
             comment=comment,
             created_by=created_by,
         )

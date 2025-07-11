@@ -112,6 +112,7 @@ class SequenceRunViewSet(BaseViewSet):
             if instrument_run_id:  # Only include if instrument_run_id is not None
                 # Get all sequences for this instrument_run_id
                 sequences = sequence_set.filter(instrument_run_id=instrument_run_id).order_by('start_time')
+                sequence_status = sequences.filter(status__isnull=False).order_by('start_time').last().status
 
                 # Convert sequences to list of dictionaries manually
                 sequence_items = SequenceRunMinSerializer(sequences, many=True).data
@@ -121,6 +122,7 @@ class SequenceRunViewSet(BaseViewSet):
                     'start_time': group['start_time'],
                     'end_time': group['end_time'],
                     'count': group['count'],
+                    'status': sequence_status,
                     'items': sequence_items
                 })
 

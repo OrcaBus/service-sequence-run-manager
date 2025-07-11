@@ -7,7 +7,7 @@ import gzip
 
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
-from sequence_run_manager.models.comment import Comment
+from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
 from sequence_run_manager_proc.services.sequence_library_srv import update_sequence_run_libraries_linking
 
@@ -73,7 +73,8 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
     # step 3: create a comment for the sample sheet
     if event_detail.get("comment") is not None:
         Comment.objects.create(
-            association_id=sample_sheet.orcabus_id,
+            target_id=sample_sheet.orcabus_id,
+            target_type=TargetType.SAMPLE_SHEET,
             comment=event_detail["comment"]["comment"],
             created_by=event_detail["comment"]["createdBy"],
         )

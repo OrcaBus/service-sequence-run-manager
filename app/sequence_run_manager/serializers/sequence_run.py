@@ -73,6 +73,7 @@ class SequenceRunGroupByInstrumentRunIdSerializer(serializers.Serializer):
                             "instrumentRunId": {"type": "string"},
                             "startTime": {"type": "string", "format": "date-time"},
                             "endTime": {"type": "string", "format": "date-time"},
+                            "status": {"type": "string"},
                             "count": {"type": "integer"},
                             "items": {
                                 "type": "array",

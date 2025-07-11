@@ -58,7 +58,8 @@ class SequenceViewSet(GenericViewSet):
         """
         instrument_run_id = kwargs.get('instrument_run_id')
         sequences_orcabus_ids = Sequence.objects.filter(instrument_run_id=instrument_run_id).values_list('orcabus_id', flat=True)
-        comments = Comment.objects.filter(association_id__in=sequences_orcabus_ids)
+        sample_sheets_orcabus_ids = SampleSheet.objects.filter(sequence__in=sequences_orcabus_ids).values_list('orcabus_id', flat=True)
+        comments = Comment.objects.filter(target_id__in=sequences_orcabus_ids).union(Comment.objects.filter(target_id__in=sample_sheets_orcabus_ids))
         serializer = CommentSerializer(comments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -72,8 +73,8 @@ class SequenceViewSet(GenericViewSet):
         instrument_run_id = kwargs.get('instrument_run_id')
         sequences = Sequence.objects.filter(instrument_run_id=instrument_run_id)
         sample_sheets = SampleSheet.objects.filter(sequence__in=sequences)
-        comments = Comment.objects.filter(association_id__in=sample_sheets.values_list('orcabus_id', flat=True))
+        comments = Comment.objects.filter(target_id__in=sample_sheets.values_list('orcabus_id', flat=True))
         for sample_sheet in sample_sheets:
-            sample_sheet.comment = comments.filter(association_id=sample_sheet.orcabus_id).first()
+            sample_sheet.comment = comments.filter(target_id=sample_sheet.orcabus_id).first()
         serializer = SampleSheetWithCommentSerializer(sample_sheets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

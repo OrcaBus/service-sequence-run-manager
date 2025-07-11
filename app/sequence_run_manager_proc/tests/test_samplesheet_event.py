@@ -55,6 +55,6 @@ class SampleSheetEventUnitTests(SequenceRunProcUnitTestCase):
         logger.info(f"Found LibraryAssociation record from db: {qs_libraries}")
         self.assertEqual(2, qs_libraries.count())
 
-        qs_comment = Comment.objects.filter(association_id=qs_sample_sheet.first().orcabus_id)
+        qs_comment = Comment.objects.filter(target_id=qs_sample_sheet.first().orcabus_id)
         logger.info(f"Found Comment record from db: {qs_comment}")
         self.assertEqual(1, qs_comment.count())
