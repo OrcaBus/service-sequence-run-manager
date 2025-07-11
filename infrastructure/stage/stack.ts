@@ -157,6 +157,7 @@ export class SequenceRunManagerStack extends Stack {
   }
 
   private createApiHandlerAndIntegration(props: SequenceRunManagerStackProps) {
+    const API_VERSION = 'v1';
     const apiFn: PythonFunction = this.createPythonFunction('Api', {
       index: 'api.py',
       handler: 'handler',
@@ -200,7 +201,17 @@ export class SequenceRunManagerStack extends Stack {
       routeKey: HttpRouteKey.with('/{proxy+}', HttpMethod.DELETE),
     });
 
+    // Route and permission for sequence run action (add samplesheet) where it needs to put event to mainBus
     this.mainBus.grantPutEventsTo(apiFn);
+    new HttpRoute(this, 'PostRerunHttpRoute', {
+      httpApi: httpApi,
+      integration: apiIntegration,
+      authorizer: srmApi.authStackHttpLambdaAuthorizer,
+      routeKey: HttpRouteKey.with(
+        `/api/${API_VERSION}/sequence_run/action/add_samplesheet/{proxy+}`,
+        HttpMethod.POST
+      ),
+    });
   }
 
   private createProcSqsHandler() {
