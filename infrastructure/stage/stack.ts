@@ -298,10 +298,9 @@ export class SequenceRunManagerStack extends Stack {
       detail: {
         instrumentRunId: [{ exists: true }],
         sequenceRunId: [{ exists: true }],
-        sequenceOrcabusId: [{ exists: true }],
         timeStamp: [{ exists: true }],
         sampleSheetName: [{ exists: true }],
-        samplesheetbase64gz: [{ exists: true }],
+        samplesheetBase64gz: [{ exists: true }],
       },
     });
     eventRule.addTarget(new LambdaFunction(fn));
@@ -331,7 +330,6 @@ export class SequenceRunManagerStack extends Stack {
       detail: {
         instrumentRunId: [{ exists: true }],
         sequenceRunId: [{ exists: true }],
-        sequenceOrcabusId: [{ exists: true }],
         timeStamp: [{ exists: true }],
         linkedLibraries: [{ exists: true }],
       },
