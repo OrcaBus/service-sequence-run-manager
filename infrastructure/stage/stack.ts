@@ -199,6 +199,8 @@ export class SequenceRunManagerStack extends Stack {
       integration: apiIntegration,
       routeKey: HttpRouteKey.with('/{proxy+}', HttpMethod.DELETE),
     });
+
+    this.mainBus.grantPutEventsTo(apiFn);
   }
 
   private createProcSqsHandler() {
