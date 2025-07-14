@@ -12,14 +12,8 @@ services:
       - POSTGRES_PASSWORD=orcabus
     ports:
       - '5435:5432'
-    command: >
-      bash -c "
-        docker-entrypoint.sh postgres &
-        until pg_isready -U orcabus; do sleep 1; done;
-        psql -U orcabus -d postgres -c 'CREATE ROLE sequence_run_manager WITH LOGIN;' || true;
-        psql -U orcabus -d postgres -c 'GRANT ALL PRIVILEGES ON DATABASE sequence_run_manager TO sequence_run_manager;' || true;
-        wait
-      "
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -d sequence_run_manager -U orcabus']
       interval: 10s
@@ -31,7 +25,7 @@ services:
   sequence-run-manager:
     environment:
       - DB_HOSTNAME=orcabus_db_sequence_run_manager
-      - DB_PORT=5435
+      - DB_PORT=5432
       - PYTHONUNBUFFERED=1
     ports:
       - '8300:8000'
