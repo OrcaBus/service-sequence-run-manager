@@ -29,7 +29,7 @@ def emit_srm_api_event(event):
         "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id (if empty, a new ghost sequence run is created)
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",
         "sampleSheetName": "sampleSheet_v2.csv",
-        "samplesheetbase64gz": "base64_encoded_samplesheet........",
+        "samplesheetBase64gz": "base64_encoded_samplesheet........",
         "comment":{
             "comment": "comment",
             "created_by": "user",
@@ -73,17 +73,16 @@ def emit_srm_api_event(event):
         logger.error(f"Unsupported event type: {event_type}")
         return
 
+    source = "orcabus.sequencerunmanagerapi"
     match event_type:
         case "SequenceRunSampleSheetChange":
-            event_type = "SequenceRunSampleSheetChange"
             detail_type = "SequenceRunSampleSheetChange"
-            source = "orcabus.sequencerunmanagerapi"
             detail = SequenceRunSampleSheetChange({
                 "instrumentRunId": event["instrumentRunId"],
                 "sequenceRunId": event["sequenceRunId"],
                 "timeStamp": datetime.now(),
                 "sampleSheetName": event["sampleSheetName"],
-                "samplesheetbase64gz": event["samplesheetbase64gz"],
+                "samplesheetBase64gz": event["samplesheetBase64gz"],
                 "comment": {
                     "comment": event["comment"]["comment"],
                     "created_by": event["comment"]["created_by"],
@@ -92,19 +91,13 @@ def emit_srm_api_event(event):
             })
 
         case "SequenceRunLibraryLinkingChange":
-            event_type = "SequenceRunLibraryLinkingChange"
             detail_type = "SequenceRunLibraryLinkingChange"
-            source = "orcabus.sequencerunmanagerapi"
             detail = SequenceRunLibraryLinkingChange({
                 "instrumentRunId": event["instrumentRunId"],
                 "sequenceRunId": event["sequenceRunId"],
                 "timeStamp": datetime.now(),
                 "linkedLibraries": event["linkedLibraries"],
-                "comment": {
-                    "comment": event["comment"]["comment"],
-                    "created_by": event["comment"]["created_by"],
-                    "created_at": event["comment"]["created_at"]
-                }
+
             })
 
         case _:

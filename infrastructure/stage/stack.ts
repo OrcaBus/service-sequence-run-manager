@@ -157,7 +157,6 @@ export class SequenceRunManagerStack extends Stack {
   }
 
   private createApiHandlerAndIntegration(props: SequenceRunManagerStackProps) {
-    const API_VERSION = 'v1';
     const apiFn: PythonFunction = this.createPythonFunction('Api', {
       index: 'api.py',
       handler: 'handler',
@@ -203,6 +202,12 @@ export class SequenceRunManagerStack extends Stack {
 
     // Permission for sequence run action (add samplesheet) where it needs to put event to mainBus
     this.mainBus.grantPutEventsTo(apiFn);
+    apiFn.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['events:PutEvents'],
+        resources: [this.mainBus.eventBusArn],
+      })
+    );
   }
 
   private createProcSqsHandler() {
