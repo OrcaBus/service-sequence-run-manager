@@ -36,7 +36,7 @@ def update_sequence_run_libraries_linking(sequence_run: Sequence, linked_librari
     """
     if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linked_libraries:
         existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
-        if set(existing_libraries) == set(linked_libraries):
+        if existing_libraries and set(existing_libraries) == set(linked_libraries):
             logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
             return
         else:

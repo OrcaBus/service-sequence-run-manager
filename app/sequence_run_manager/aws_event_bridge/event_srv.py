@@ -73,10 +73,10 @@ def emit_srm_api_event(event):
         logger.error(f"Unsupported event type: {event_type}")
         return
 
-    source = "orcabus.sequencerunmanagerapi"
+    detail_type = event_type
+    detail = None
     match event_type:
         case "SequenceRunSampleSheetChange":
-            detail_type = "SequenceRunSampleSheetChange"
             detail = SequenceRunSampleSheetChange({
                 "instrumentRunId": event["instrumentRunId"],
                 "sequenceRunId": event["sequenceRunId"],
@@ -91,13 +91,11 @@ def emit_srm_api_event(event):
             })
 
         case "SequenceRunLibraryLinkingChange":
-            detail_type = "SequenceRunLibraryLinkingChange"
             detail = SequenceRunLibraryLinkingChange({
                 "instrumentRunId": event["instrumentRunId"],
                 "sequenceRunId": event["sequenceRunId"],
                 "timeStamp": datetime.now(),
                 "linkedLibraries": event["linkedLibraries"],
-
             })
 
         case _:
@@ -113,6 +111,6 @@ def emit_srm_api_event(event):
     })
 
     logger.info(f"Sent a {event_type} event to event bus {event_bus_name}:")
-    logger.info(event)
+    logger.info(detail)
     logger.info(f"{__name__} done.")
     return response

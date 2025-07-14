@@ -84,13 +84,12 @@ class SequenceRunActionViewSet(ViewSet):
             return Response({"detail": "comment is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # step 1: create a fake sequence run
-        sequence_run = Sequence(
+        sequence_run = Sequence.objects.create(
             instrument_run_id=instrument_run_id,
             sequence_run_id="r."+ulid.new().str,
             sample_sheet_name=samplesheet_name,
             start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
         )
-        sequence_run.save()
         logger.info(f"Sequence run created for instrument run {instrument_run_id}")
 
         # step 2: read the uploaded samplesheet, and encodeed with base64
@@ -108,20 +107,18 @@ class SequenceRunActionViewSet(ViewSet):
             return Response({"detail": f"Invalid samplesheet format: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         # step 3: save samplesheet to database
-        sample_sheet = SampleSheet(
+        sample_sheet = SampleSheet.objects.create(
             sequence=sequence_run,
             sample_sheet_name=samplesheet_name,
             sample_sheet_content=samplesheet_content_json,
         )
-        sample_sheet.save()
 
-        comment_obj = Comment(
+        comment_obj = Comment.objects.create(
             target_id=sample_sheet.orcabus_id,
             target_type=TargetType.SAMPLE_SHEET,
             comment=comment,
             created_by=created_by,
         )
-        comment_obj.save()
         logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}, and comment {comment_obj.orcabus_id} saved")
 
         # step 4: construct event bridge detail and emit event to event bridge
