@@ -25,7 +25,7 @@ def event_handler(event, context):
     "version": "0",
     "id": "12345678-90ab-cdef-1234-567890abcdef",
     "detail-type": "SequenceRunSampleSheetChange",
-    "source": "orcabus.sequencerunmanager",
+    "source": "external.sequencerunmanager",
     "account": "000000000000",
     "time": "2025-03-00T00:00:00Z",
     "region": "ap-southeast-2",

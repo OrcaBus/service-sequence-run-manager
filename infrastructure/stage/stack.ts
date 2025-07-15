@@ -293,7 +293,6 @@ export class SequenceRunManagerStack extends Stack {
       source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
       detail: {
         instrumentRunId: [{ exists: true }],
-        sequenceRunId: [{ exists: true }],
         timeStamp: [{ exists: true }],
         sampleSheetName: [{ exists: true }],
         samplesheetBase64gz: [{ exists: true }],
