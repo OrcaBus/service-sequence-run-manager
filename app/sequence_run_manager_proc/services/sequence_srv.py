@@ -166,7 +166,7 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
         )
 
     status_changed = is_new_sequence or (sequence.status != status.value and sequence.status != SequenceStatus.SUCCEEDED.value)
-    is_reconversion_sequence = state == "pendinganalysis" and sequence.status == SequenceStatus.SUCCEEDED.value
+    is_reconversion_sequence = state.lower() == "pendinganalysis" and sequence.status == SequenceStatus.SUCCEEDED.value
 
     logger.info(f"Creating SequenceDomain (sequence_run_id={sequence.sequence_run_id}, status={status.value}, new_sequence_created={is_new_sequence})")
     # update status and end time if status has changed
