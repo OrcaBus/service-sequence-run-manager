@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 
-from sequence_run_manager.models.comment import Comment
+from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.sequence import Sequence
 from sequence_run_manager.serializers.comment import CommentSerializer
 
@@ -19,12 +19,12 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
 
     def get_queryset(self):
         return Comment.objects.filter(
-            association_id=self.kwargs["orcabus_id"],
+            target_id=self.kwargs["orcabus_id"],
             is_deleted=False
         )
 
     def perform_create(self, serializer):
-        serializer.save(association_id=self.kwargs["orcabus_id"])
+        serializer.save(target_id=self.kwargs["orcabus_id"])
 
     def create(self, request, *args, **kwargs):
         seq_orcabus_id = self.kwargs["orcabus_id"]
@@ -41,7 +41,8 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
 
         # Add workflow_run_id to the request data
         mutable_data = request.data.copy()
-        mutable_data['association_id'] = seq_orcabus_id
+        mutable_data['target_id'] = seq_orcabus_id
+        mutable_data['target_type'] = TargetType.SEQUENCE
         comment_obj = Comment.objects.create( **mutable_data)
         serializer = self.get_serializer(comment_obj)
         headers = self.get_success_headers(serializer.data)

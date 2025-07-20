@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Q
 
 from sequence_run_manager.models.sequence import Sequence
-from sequence_run_manager.serializers.sequence import SequenceRunCountByStatusSerializer
+from sequence_run_manager.serializers.sequence_run import SequenceRunCountByStatusSerializer
 
 
 class SequenceStatsViewSet(GenericViewSet):
@@ -58,8 +58,9 @@ class SequenceStatsViewSet(GenericViewSet):
         }
 
         for item in status_counts:
-            status = item['status'].lower()
-            counts[status] = item['count']
+            if item['status'] is not None:
+                status = item['status'].lower()
+                counts[status] = item['count']
 
         return Response(counts, status=200)
 

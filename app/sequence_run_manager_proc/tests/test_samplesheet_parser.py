@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from unittest import TestCase
-from sequence_run_manager_proc.services.v2_samplesheet_parser.parser import parse_samplesheet
+from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
 class TestSampleSheetParser(TestCase):
     def setUp(self):

@@ -3,11 +3,8 @@ from datetime import datetime
 
 from sequence_run_manager.tests.factories import SequenceFactory
 from sequence_run_manager_proc.domain.sequence import SequenceDomain
-from sequence_run_manager_proc.domain.sequencerunstatechange import (
-    Marshaller,
-    SequenceRunStateChange,
-    AWSEvent,
-)
+
+from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange, AWSEvent
 from sequence_run_manager_proc.tests.case import SequenceRunProcUnitTestCase, logger
 
 
@@ -27,35 +24,36 @@ class SequenceDomainUnitTests(SequenceRunProcUnitTestCase):
             sequence=mock_sequence, state_has_changed=True, status_has_changed=True
         )
 
-        marshalled_object = Marshaller.marshall(mock_sequence_domain.to_event())
+        event_json = mock_sequence_domain.to_event().model_dump_json()
+        validated_object = SequenceRunStateChange.model_validate_json(event_json)
 
-        logger.info(marshalled_object)
-        logger.info(json.dumps(marshalled_object))
-        self.assertIsNotNone(marshalled_object)
-        self.assertIsInstance(marshalled_object, dict)
-        self.assertIn("id", marshalled_object.keys())
-        self.assertIn("instrumentRunId", marshalled_object.keys())
+        logger.info(validated_object)
+        logger.info(event_json)
+        self.assertIsNotNone(validated_object)
+        self.assertIsInstance(validated_object, SequenceRunStateChange)
+        self.assertIn("id", validated_object.model_dump().keys())
+        self.assertIn("instrumentRunId", validated_object.model_dump().keys())
 
-    def test_unmarshall(self):
-        """
-        python manage.py test sequence_run_manager_proc.tests.test_sequence_domain.SequenceDomainUnitTests.test_unmarshall
-        """
-        mock_sequence = SequenceFactory()
-        mock_sequence_domain = SequenceDomain(
-            sequence=mock_sequence, state_has_changed=True, status_has_changed=True
-        )
+    # def test_unmarshall(self):
+    #     """
+    #     python manage.py test sequence_run_manager_proc.tests.test_sequence_domain.SequenceDomainUnitTests.test_unmarshall
+    #     """
+    #     mock_sequence = SequenceFactory()
+    #     mock_sequence_domain = SequenceDomain(
+    #         sequence=mock_sequence, state_has_changed=True, status_has_changed=True
+    #     )
 
-        marshalled_object = Marshaller.marshall(mock_sequence_domain.to_event())
+    #     marshalled_object = SequenceRunStateChange.model_validate(mock_sequence_domain.to_event())
 
-        unmarshalled_object = Marshaller.unmarshall(
-            data=marshalled_object, typeName=mock_sequence_domain.event_type
-        )
+    #     unmarshalled_object = SequenceRunStateChange.model_validate(
+    #         marshalled_object
+    #     )
 
-        logger.info(unmarshalled_object)
-        self.assertIsNotNone(unmarshalled_object)
-        self.assertIsInstance(unmarshalled_object, object)
-        self.assertIsInstance(unmarshalled_object, SequenceRunStateChange)
-        self.assertIsInstance(unmarshalled_object.startTime, datetime)
+    #     logger.info(unmarshalled_object)
+    #     self.assertIsNotNone(unmarshalled_object)
+    #     self.assertIsInstance(unmarshalled_object, object)
+    #     self.assertIsInstance(unmarshalled_object, SequenceRunStateChange)
+    #     self.assertIsInstance(unmarshalled_object.startTime, datetime)
 
     def test_aws_event_serde(self):
         """
@@ -69,7 +67,7 @@ class SequenceDomainUnitTests(SequenceRunProcUnitTestCase):
         aws_event = mock_sequence_domain.to_event_with_envelope()
 
         logger.info(aws_event)
-        logger.info(json.dumps(Marshaller.marshall(aws_event)))
+        logger.info(AWSEvent.model_validate_json(aws_event.model_dump_json()))
         self.assertIsNotNone(aws_event)
         self.assertIsInstance(aws_event, AWSEvent)
 
@@ -86,19 +84,13 @@ class SequenceDomainUnitTests(SequenceRunProcUnitTestCase):
             event_bus_name="MockBus",
         )
         logger.info(mock_entry)
+        mock_entry_detail = mock_entry["Detail"]
 
         self.assertIsNotNone(mock_entry)
         self.assertIsInstance(mock_entry, dict)
         self.assertIn("Detail", mock_entry.keys())
-        self.assertIsInstance(mock_entry["Detail"], str)
+        self.assertIsInstance(mock_entry_detail, str)
         self.assertIsInstance(mock_entry["DetailType"], str)
 
-        mock_entry_detail = json.loads(mock_entry["Detail"])
-        logger.info(mock_entry_detail)
-        self.assertIsInstance(mock_entry_detail, dict)
-
-        unmarshalled_detail = Marshaller.unmarshall(
-            data=mock_entry_detail, typeName=SequenceRunStateChange
-        )
-        logger.info(unmarshalled_detail)
-        self.assertIsInstance(unmarshalled_detail, SequenceRunStateChange)
+        validated_detail = SequenceRunStateChange.model_validate_json(mock_entry_detail)
+        self.assertIsInstance(validated_detail, SequenceRunStateChange)

@@ -1,0 +1,4 @@
+pyyaml
+genson
+json-spec
+check-jsonschema

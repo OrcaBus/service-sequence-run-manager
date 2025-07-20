@@ -7,11 +7,7 @@ from libumccr.aws import libssm
 
 from sequence_run_manager.models import Sequence
 from sequence_run_manager.models.sequence import SequenceStatus
-from sequence_run_manager_proc.domain.sequencerunstatechange import (
-    SequenceRunStateChange,
-    AWSEvent,
-    Marshaller,
-)
+from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange, AWSEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,6 +24,9 @@ class SequenceDomain:
     #  flag to indicate if state or status has changed
     state_has_changed: bool = False # reference to State model (uploading, running, new, complete, analyzing, pendinganalysis, ...)
     status_has_changed: bool = False # reference to Sequence model (STARTED, SUCCEEDED, FAILED, ABORTED)
+
+    # flag to indicate if sequence is re-conversion (via BSSH) with an updated SampleSheet
+    is_reconversion_sequence: bool = False
 
     @property
     def namespace(self) -> str:
@@ -77,9 +76,7 @@ class SequenceDomain:
         """Convert Domain event with envelope to Entry dict struct of PutEvent API"""
         domain_event_with_envelope = self.to_event_with_envelope()
         entry = {
-            "Detail": json.dumps(
-                Marshaller.marshall(domain_event_with_envelope.detail)
-            ),
+            "Detail": domain_event_with_envelope.detail.model_dump_json(),
             "DetailType": domain_event_with_envelope.detail_type,
             "Resources": [],
             "Source": domain_event_with_envelope.source,

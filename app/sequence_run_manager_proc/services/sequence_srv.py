@@ -142,15 +142,31 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
     """
     Create SequenceDomain with change tracking
 
-    status_changed to be true if:
-    - new sequence is created
-    - sequence status has changed and current sequence status is not SequenceStatus.SUCCEEDED (SequenceStatus.SUCCEEDED means sequence run is succeeded, any failed or aborted state after that is coming from analysis stage which is not relevant to this sequence run)
-
     state_changed to be true if:
     - new state is created (state has unique status, timestamp combination)
 
+    status_changed to be true if:
+    - new sequence is created
+    - sequence status has changed and current sequence status is not SequenceStatus.SUCCEEDED ('pendinganalysis','analyzing',etc means sequence run is succeeded, any failed or aborted state after that is coming from analysis stage which is not relevant to this sequence run)
+
+    is_reconversion_sequence to be true if:
+    - "pendinganalysis" state after terminal('complete','failed','aborted', etc) state
+
     """
+
+    # check if state exists
+    state_exists = State.objects.filter(sequence=sequence,timestamp=timing_info['start_time'],status=state).exists()
+
+    if state_exists:
+        return SequenceDomain(
+            sequence=sequence,
+            status_has_changed=False,
+            state_has_changed=False,
+            is_reconversion_sequence=False
+        )
+
     status_changed = is_new_sequence or (sequence.status != status.value and sequence.status != SequenceStatus.SUCCEEDED.value)
+    is_reconversion_sequence = state.lower() == "pendinganalysis" and sequence.status == SequenceStatus.SUCCEEDED.value
 
     logger.info(f"Creating SequenceDomain (sequence_run_id={sequence.sequence_run_id}, status={status.value}, new_sequence_created={is_new_sequence})")
     # update status and end time if status has changed
@@ -160,11 +176,9 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
         sequence.end_time = timing_info['end_time']
         sequence.save()
 
-    # check if state exists
-    state_exists = State.objects.filter(sequence=sequence,timestamp=timing_info['start_time'],status=state).exists()
-
     return SequenceDomain(
         sequence=sequence,
         status_has_changed=status_changed,
-        state_has_changed=not state_exists
+        state_has_changed=True,
+        is_reconversion_sequence=is_reconversion_sequence
     )

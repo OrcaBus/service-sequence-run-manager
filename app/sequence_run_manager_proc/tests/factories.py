@@ -219,3 +219,57 @@ class SequenceRunManagerProcFactory:
                 },
             ]
         }
+
+    def mock_sample_sheet_change_event_message():
+        mock_instrument_run_id = TestConstant.instrument_run_id.value
+        mock_time_stamp = "2024-11-02T21:58:13.7451620Z"
+        base64_encoded_gz_content = "H4sIAAhBbmgC/1WPbWsCMQzH3/ezdLKWu03Yq1pZdagMLYMhIuEuSqHXurbq/PaLOvdAQ5pfmvyTLucIbV6xRJfQp8Zj5qIWF5Z/2IUWP28F/SvKH2TLEdVjIp19mEGHfAjHHMPdYPowWYtqCknW1JRL2ncYij3tkM/iARb4wTbO43NMHZQ3TNnFwCUJDhrfxHDAVNYLLMWFLW0ZiZNr8XvwO232NO6f7RyyHDflCAlvOlVP9h7/aw2hwIp5CMgvf7h6yTN0O4/jlgmurVFWG8uNNlpZZfnkdf4i6/tKCnpW2tIxiv+mJfsCIvh/8UcBAAA=" # pragma: allowlist-secret
+
+        mock_event_message = {
+                "instrumentRunId": mock_instrument_run_id,
+                "timeStamp": mock_time_stamp,
+                "sampleSheetName": "SampleSheet.V2.csv",
+                "samplesheetBase64gz": base64_encoded_gz_content,
+                "comment": {
+                    "comment": "comment",
+                    "createdBy": "created_by",
+                }
+            }
+        orcabus_event_message = {
+            "version": "0",
+            "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
+            "detail-type": "Event from aws:sqs",
+            "source": "Pipe IcaEventPipeConstru-xxxxxxxx",
+            "account": "444444444444",
+            "time": "2024-11-02T21:58:22Z",
+            "region": "ap-southeast-2",
+            "resources": [],
+            "detail": mock_event_message
+        }
+        return orcabus_event_message
+
+    def mock_library_linking_change_event_message(sequence_run_id: str):
+        mock_instrument_run_id = TestConstant.instrument_run_id.value
+        mock_sequence_run_id = sequence_run_id
+        mock_time_stamp = "2024-11-02T21:58:13.7451620Z"
+        mock_linked_libraries = ["L06789ABCD", "L01234ABCD", "L01234ABCDG"]
+
+        mock_event_message = {
+            "instrumentRunId": mock_instrument_run_id,
+            "sequenceRunId": mock_sequence_run_id,
+            "timeStamp": mock_time_stamp,
+            "linkedLibraries": mock_linked_libraries
+        }
+
+        orcabus_event_message = {
+            "version": "0",
+            "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
+            "detail-type": "Event from aws:sqs",
+            "source": "Pipe IcaEventPipeConstru-xxxxxxxx",
+            "account": "444444444444",
+            "time": "2024-11-02T21:58:22Z",
+            "region": "ap-southeast-2",
+            "resources": [],
+            "detail": mock_event_message
+        }
+        return orcabus_event_message

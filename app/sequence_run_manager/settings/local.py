@@ -4,6 +4,7 @@
 Usage:
 - export DJANGO_SETTINGS_MODULE=sequence_run_manager.settings.local
 """
+import os
 import sys
 
 from environ import Env
