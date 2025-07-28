@@ -278,7 +278,7 @@ class BSSHService:
             for url in sample_sheet_urls:
                 if not url:
                     continue
-                content = self._fetch_and_decode_file_content(url)
+                content = self._fetch_and_decode_file_content(url['url'])
                 sample_sheet_contents.append({
                     'name': url['name'],
                     'content': content
@@ -357,7 +357,7 @@ class BSSHService:
                     break
 
                 for file in files:
-                    if file['Name'].startswith('SampleSheet.'):
+                    if file['Name'].endswith('.csv') and ('samplesheet' in file['Name'].lower() or 'sample_sheet' in file['Name'].lower()):
                         sample_sheet_urls.append({
                             'name': file['Name'],
                             'url': file['HrefContent']
@@ -367,7 +367,7 @@ class BSSHService:
                     break
 
                 offset += limit
-
+            logger.info(f"Found {len(sample_sheet_urls)} sample sheet urls")
             return sample_sheet_urls
         except Exception as e:
             self.handle_request_error(e, "when getting sample sheet file content url")
