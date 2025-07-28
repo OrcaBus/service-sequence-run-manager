@@ -357,7 +357,7 @@ class BSSHService:
                     break
 
                 for file in files:
-                    if file['Name'].endswith('.csv') and 'samplesheet' in file['Name'].lower():
+                    if file['Name'].endswith('.csv') and ('samplesheet' in file['Name'].lower() or 'sample_sheet' in file['Name'].lower()):
                         sample_sheet_urls.append({
                             'name': file['Name'],
                             'url': file['HrefContent']
