@@ -50,6 +50,7 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
     if not, create the linking
     """
     assert payload["id"] is not None, "sequence run id is required"
+    assert payload["sampleSheetName"] is not None, "sample sheet name is required"
 
     sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     if not sequence_run:
@@ -57,7 +58,12 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
         raise ValueError(f"Sequence run {payload['id']} not found")
 
     linked_libraries = []
-    sample_sheet = SampleSheet.objects.get(sequence=sequence_run)
+    # Get the latest sample sheet by association_timestamp
+    sample_sheet = SampleSheet.objects.filter(
+        sequence=sequence_run,
+        sample_sheet_name=payload["sampleSheetName"]
+    ).order_by('-association_timestamp').first()
+
     if sample_sheet:
         logger.info(f"Sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from sample sheet")
         bclconvert_data = sample_sheet.sample_sheet_content.get("bclconvert_data", [])

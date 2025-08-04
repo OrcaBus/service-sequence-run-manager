@@ -17,7 +17,7 @@ class SequenceRunManagerProcFactory:
             "acl": ["wid:e4730533-d752-3601-b4b7-8d4d2f6373de", "tid:Yxmm......"],
             "flowcellBarcode": "BARCODEEE",
             "icaProjectId": "12345678-53ba-47a5-854d-e6b53101adb7",
-            "sampleSheetName": "MockSampleSheet.csv",
+            "sampleSheetName": "SampleSheet.csv",
             "apiUrl": f"https://api.aps2.sh.basespace.illumina.com/v2/runs/{mock_sequence_run_id}",
             "name": mock_sequence_run_name,
             "id": mock_sequence_run_id,
