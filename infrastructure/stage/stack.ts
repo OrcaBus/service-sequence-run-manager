@@ -388,7 +388,8 @@ export class SequenceRunManagerStack extends Stack {
           content: {
             textType: 'client-markdown',
             title:
-              ':bell: Sequence Run Status Alert | RUN ID: ' + EventField.fromPath('$.detail.id'),
+              ':bell: Sequence Run Status Alert | Instrument Run ID: ' +
+              EventField.fromPath('$.detail.instrumentRunId'),
             description: [
               '*Status:* ' + EventField.fromPath('$.detail.status'),
               '',
@@ -402,11 +403,11 @@ export class SequenceRunManagerStack extends Stack {
               ':microscope: <' +
                 orcabusUIBaseUrl +
                 '/runs/sequence/' +
-                EventField.fromPath('$.detail.id') +
+                EventField.fromPath('$.detail.instrumentRunId') +
                 '|View in Orcabus UI>',
               '',
               '---',
-              '_For support, please contact the orcabus platform team_',
+              '_For support, please contact the orcabus platform team._',
             ].join('\n'),
           },
         }),
