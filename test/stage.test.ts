@@ -111,4 +111,38 @@ function applyNagSuppression(stack: Stack) {
     ],
     true
   );
+
+  NagSuppressions.addStackSuppressions(
+    stack,
+    [
+      {
+        id: 'AwsSolutions-IAM5',
+        reason: 'Allow wildcard permissions based.',
+      },
+    ],
+    true
+  );
+
+  NagSuppressions.addResourceSuppressionsByPath(
+    stack,
+    '/SequenceRunManagerStack/AutoTriggerBackupMigration/backupMigrationStep/Resource',
+    [
+      {
+        id: 'AwsSolutions-SF1',
+        reason: 'Disable cloudwatch logs for simple Step Functions.',
+      },
+    ],
+    true
+  );
+  NagSuppressions.addResourceSuppressionsByPath(
+    stack,
+    '/SequenceRunManagerStack/AutoTriggerBackupMigration/backupMigrationStep/Resource',
+    [
+      {
+        id: 'AwsSolutions-SF2',
+        reason: 'Disable X-Ray for now.',
+      },
+    ],
+    true
+  );
 }
