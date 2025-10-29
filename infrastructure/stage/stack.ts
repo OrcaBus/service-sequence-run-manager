@@ -33,6 +33,7 @@ import {
   DB_CLUSTER_IDENTIFIER,
   DB_CLUSTER_RESOURCE_ID_PARAMETER_NAME,
 } from '@orcabus/platform-cdk-constructs/shared-config/database';
+import { AutoTriggerBackupMigration } from './lambda-migration';
 
 export interface SequenceRunManagerStackProps {
   lambdaSecurityGroupName: string;
@@ -149,11 +150,13 @@ export class SequenceRunManagerStack extends Stack {
   }
 
   private createMigrationHandler() {
-    this.createPythonFunction('Migration', {
+    const migrationLambda = this.createPythonFunction('Migration', {
       index: 'migrate.py',
       handler: 'handler',
-      timeout: Duration.minutes(2),
+      timeout: Duration.minutes(5),
     });
+
+    new AutoTriggerBackupMigration(this, 'AutoTriggerBackupMigration', migrationLambda);
   }
 
   private createApiHandlerAndIntegration(props: SequenceRunManagerStackProps) {
