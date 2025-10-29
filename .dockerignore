@@ -1,0 +1,13 @@
+# Ignore everything by default
+*
+!app/
+!infrastructure/
+
+cdk.out/
+__pycache__/
+**/__pycache__/
+
+.idea/
+**/.idea/
+.DS_Store
+**/.DS_Store
