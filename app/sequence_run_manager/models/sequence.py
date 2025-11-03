@@ -16,8 +16,11 @@ class SequenceStatus(models.TextChoices):
     SUCCEEDED = "SUCCEEDED"
     ABORTED = "ABORTED"
 
-    # custom status,  resolve issue: https://github.com/umccr/orcabus/issues/879
+    # custom status:
+    # resolved: resolve issue: https://github.com/umccr/orcabus/issues/879
+    # deprecated: resolve issue: https://github.com/OrcaBus/service-sequence-run-manager/issues/19
     RESOLVED = "RESOLVED"
+    DEPRECATED = "DEPRECATED"
 
     @classmethod
     def from_value(cls, value):
@@ -62,9 +65,9 @@ class SequenceStatus(models.TextChoices):
     @classmethod
     def is_terminal(cls, value):
         """
-        Check if the status is terminal (i.e. SUCCEEDED, FAILED, ABORTED)
+        Check if the status is terminal (i.e. SUCCEEDED, FAILED, ABORTED, RESOLVED, DEPRECATED)
         """
-        return value in [cls.SUCCEEDED.value, cls.FAILED.value, cls.ABORTED.value]
+        return value in [cls.SUCCEEDED.value, cls.FAILED.value, cls.ABORTED.value, cls.RESOLVED.value, cls.DEPRECATED.value]
 
 
 class SequenceManager(OrcaBusBaseManager):
