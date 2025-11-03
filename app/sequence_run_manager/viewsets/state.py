@@ -22,7 +22,8 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         "Resolved" -- https://github.com/umccr/orcabus/issues/879
     """
     valid_states_map = {
-        'RESOLVED': ['FAILED']
+        'RESOLVED': ['FAILED'],
+        'DEPRECATED': ['SUCCEEDED']
     }
 
     def get_queryset(self):
