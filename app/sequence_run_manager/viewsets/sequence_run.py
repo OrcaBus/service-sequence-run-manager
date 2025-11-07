@@ -2,6 +2,8 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import filters
+from rest_framework.settings import api_settings
 from sequence_run_manager.viewsets.base import BaseViewSet
 from sequence_run_manager.pagination import StandardResultsSetPagination
 from django.db.models import Q, Count, Min, Max
@@ -77,6 +79,9 @@ class SequenceRunViewSet(BaseViewSet):
         start_time = self.request.query_params.get('start_time', 0)
         end_time = self.request.query_params.get('end_time', 0)
 
+        # Extract search term before excluding params
+        search_term = self.request.query_params.get(api_settings.SEARCH_PARAM)
+
         # exclude the custom query params from the rest of the query params
         def exclude_params(params):
             for param in params:
@@ -87,8 +92,14 @@ class SequenceRunViewSet(BaseViewSet):
             'end_time',
         ])
 
-        # Get all sequences
+        # Get all sequences using get_by_keyword (this excludes search param internally)
         sequence_set = Sequence.objects.get_by_keyword(**self.request.query_params).distinct()
+
+        # Manually apply search filter if search parameter is provided (This is needed because custom actions don't go through DRF's filter_backends)
+        if search_term and self.search_fields:
+            search_filter = filters.SearchFilter()
+            search_filter.search_fields = self.search_fields
+            sequence_set = search_filter.filter_queryset(self.request, sequence_set, self)
 
         # Apply time filters if provided
         if start_time and end_time:
