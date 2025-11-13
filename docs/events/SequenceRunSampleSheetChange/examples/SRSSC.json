@@ -12,7 +12,7 @@
     "sequenceRunId": "r.1234567890abcdefghijklmn",
     "timeStamp": "2024-04-27T03:45:02.113245Z",
     "sampleSheetName": "sampleSheet_v2.csv",
-    "samplesheetbase64gz": "base64_encoded_samplesheet........",
+    "samplesheetBase64gz": "base64_encoded_samplesheet........",
     "comment": {
       "comment": "comment",
       "created_by": "user",

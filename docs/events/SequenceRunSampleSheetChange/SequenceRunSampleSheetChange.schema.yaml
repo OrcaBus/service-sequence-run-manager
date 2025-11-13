@@ -46,7 +46,7 @@ definitions:
         type: string
       sampleSheetName:
         type: string
-      samplesheetbase64gz:
+      samplesheetBase64gz:
         type: string
       comment:
         '$ref': '#/definitions/Comment'
