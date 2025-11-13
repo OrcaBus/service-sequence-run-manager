@@ -34,7 +34,7 @@ import {
   DB_CLUSTER_RESOURCE_ID_PARAMETER_NAME,
 } from '@orcabus/platform-cdk-constructs/shared-config/database';
 import { AutoTriggerBackupMigration } from './lambda-migration';
-import { SequenceRunManagerSchemaRegistry } from './schema';
+import { SequenceRunManagerSchemaRegistry } from './event-schema';
 
 export interface SequenceRunManagerStackProps {
   lambdaSecurityGroupName: string;
