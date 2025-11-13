@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { SequenceRunManagerSchemaRegistry } from '../infrastructure/stage/schema';
+import { SequenceRunManagerSchemaRegistry } from '../infrastructure/stage/event-schema';
 
 let stack: cdk.Stack;
 
