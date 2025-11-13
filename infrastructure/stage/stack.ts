@@ -163,7 +163,7 @@ export class SequenceRunManagerStack extends Stack {
     const apiFn: PythonFunction = this.createPythonFunction('Api', {
       index: 'api.py',
       handler: 'handler',
-      timeout: Duration.seconds(28),
+      timeout: Duration.minutes(1),
     });
 
     const srmApi = new OrcaBusApiGateway(this, 'ApiGateway', props.apiGatewayCognitoProps);
