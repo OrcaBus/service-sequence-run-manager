@@ -30,7 +30,7 @@ export class SequenceRunManagerSchemaRegistry extends Construct {
 }
 
 export const getSchemas = (): Array<SchemaProps> => {
-  const docBase: string = '../../docs/events';
+  const docBase: string = '../../../docs/events';
   const SCHEMA_REGISTRY_NAME = 'orcabus.sequencerunmanager';
 
   return [
