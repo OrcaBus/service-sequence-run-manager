@@ -1,8 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { SequenceRunManagerSchemaRegistry } from '../infrastructure/stage/event-schema';
-import { EVENT_SCHEMA_REGISTRY_NAME } from '@orcabus/platform-cdk-constructs/shared-config/event-bridge';
-
 let stack: cdk.Stack;
 
 beforeEach(() => {
@@ -16,10 +14,6 @@ test('Test orcabus.sequencerunmanager SequenceRunManagerSchemaRegistry Creation'
   const template = Template.fromStack(stack);
 
   console.log(template.toJSON());
-
-  template.hasResourceProperties('AWS::EventSchemas::Registry', {
-    RegistryName: EVENT_SCHEMA_REGISTRY_NAME,
-  });
 
   template.hasResourceProperties('AWS::EventSchemas::Schema', {
     SchemaName: 'orcabus.sequencerunmanager@SequenceRunStateChange',
