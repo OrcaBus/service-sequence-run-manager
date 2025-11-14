@@ -34,6 +34,7 @@ import {
   DB_CLUSTER_RESOURCE_ID_PARAMETER_NAME,
 } from '@orcabus/platform-cdk-constructs/shared-config/database';
 import { AutoTriggerBackupMigration } from './lambda-migration';
+import { SequenceRunManagerSchemaRegistry } from './event-schema';
 
 export interface SequenceRunManagerStackProps {
   lambdaSecurityGroupName: string;
@@ -68,6 +69,9 @@ export class SequenceRunManagerStack extends Stack {
       props.lambdaSecurityGroupName,
       this.vpc
     );
+
+    // Create the registry and publish the schemas
+    new SequenceRunManagerSchemaRegistry(this, 'SequenceRunManagerSchemaRegistry');
 
     this.lambdaRole = new Role(this, 'LambdaRole', {
       assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
