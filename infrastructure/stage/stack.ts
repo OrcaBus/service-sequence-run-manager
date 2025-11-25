@@ -258,7 +258,9 @@ export class SequenceRunManagerStack extends Stack {
           status: [{ exists: true }],
           dateModified: [{ exists: true }],
           apiUrl: [{ exists: true }],
-          sampleSheetName: [{ exists: true }],
+          // Note: sampleSheetName is not always present for
+          // See https://github.com/OrcaBus/service-sequence-run-manager/issues/28 for context
+          // sampleSheetName: [{ exists: true }],
           icaProjectId: [{ exists: true }],
 
           // NOTE: instrumentRunId, name, flowcellBarcode are not always present in early stage of the run
@@ -297,7 +299,7 @@ export class SequenceRunManagerStack extends Stack {
     eventRule.addEventPattern({
       detailType: ['SequenceRunSampleSheetChange'],
       // @ts-expect-error anything-but is not supported in the type definition
-      source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
+      source: [{ 'anything-but': ['orcabus.sequencerunmanager', 'orcabus.sequencerunmanagerapi'] }],
       detail: {
         instrumentRunId: [{ exists: true }],
         timeStamp: [{ exists: true }],
@@ -328,7 +330,7 @@ export class SequenceRunManagerStack extends Stack {
     eventRule.addEventPattern({
       detailType: ['SequenceRunLibraryLinkingChange'],
       // @ts-expect-error anything-but is not supported in the type definition
-      source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
+      source: [{ 'anything-but': ['orcabus.sequencerunmanager', 'orcabus.sequencerunmanagerapi'] }],
       detail: {
         instrumentRunId: [{ exists: true }],
         sequenceRunId: [{ exists: true }],

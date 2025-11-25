@@ -10,6 +10,9 @@ fix:
 	@pnpm prettier-fix
 	@pnpm lint-fix
 
+audit-fix:
+	@pnpm audit --fix
+
 install:
 	@pnpm install --frozen-lockfile
 

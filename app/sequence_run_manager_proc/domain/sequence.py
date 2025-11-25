@@ -25,8 +25,11 @@ class SequenceDomain:
     state_has_changed: bool = False # reference to State model (uploading, running, new, complete, analyzing, pendinganalysis, ...)
     status_has_changed: bool = False # reference to Sequence model (STARTED, SUCCEEDED, FAILED, ABORTED)
 
-    # flag to indicate if sequence is re-conversion (via BSSH) with an updated SampleSheet
-    is_reconversion_sequence: bool = False
+    # flag to indicate if this sequence run is a reconversion (detected via BSSH event and SampleSheet update)
+    is_reconversion: bool = False
+
+    # flag to indicate if sample sheet is ready to be retrieved from BSSH
+    sample_sheet_ready: bool = False
 
     @property
     def namespace(self) -> str:

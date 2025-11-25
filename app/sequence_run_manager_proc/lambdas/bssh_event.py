@@ -11,9 +11,11 @@ import logging
 from sequence_run_manager_proc.domain.sequence import (
     SequenceDomain,
     SequenceRule,
-    SequenceRuleError,
-    SequenceStatus,
+    SequenceRuleError
 )
+from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
+from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
+
 from sequence_run_manager_proc.services import sequence_srv, sequence_state_srv, sequence_library_srv, sample_sheet_srv
 
 from libumccr import libjson
@@ -101,24 +103,26 @@ def event_handler(event, context):
     # Extract relevant fields from the event payload
     event_details = event.get("detail", {}).get("ica-event", {})
 
+    srsc_entry = None
+    srssc_entry = None
+    srllc_entry = None
+
     # Create or update Sequence record from BSSH Run event payload
-    sequence_domain: SequenceDomain = (
-        sequence_srv.create_or_update_sequence_from_bssh_event(event_details)
-    )
-    entry = None
+    sequence_domain: SequenceDomain = sequence_srv.create_or_update_sequence_from_bssh_event(event_details)
 
     # Create SequenceRunState record from BSSH Run event payload
     if sequence_domain.state_has_changed:
         sequence_state_srv.create_sequence_state_from_bssh_event(event_details)
 
-    # Check or create sequence run libraries linking and sample sheet when events uploaded finished (terminal status)
-    if sequence_domain.status_has_changed and SequenceStatus.is_terminal(sequence_domain.sequence.status):
-        sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
-        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
+    # Check or create sequence run libraries linking and sample sheet when we get new event
+    if sequence_domain.state_has_changed and sequence_domain.sample_sheet_ready:
+        sample_sheet_domain: SampleSheetDomain = sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
+        library_linking_domain: LibraryLinkingDomain = sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
-    if sequence_domain.is_reconversion_sequence:
-        sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
-        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
+    # Check or create sequence run libraries linking and sample sheet for reconversion
+    if sequence_domain.is_reconversion:
+        sample_sheet_domain: SampleSheetDomain = sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
+        library_linking_domain: LibraryLinkingDomain = sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
     # Detect SequenceRunStatusChange
     if sequence_domain.status_has_changed:
@@ -133,9 +137,23 @@ def event_handler(event, context):
             reason = f"Aborted pipeline due to {se}"
             logger.warning(reason)
 
+    if sample_sheet_domain and sample_sheet_domain.sample_sheet_has_changed:
+        srssc_entry = sample_sheet_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+
+    if library_linking_domain and library_linking_domain.library_linking_has_changed:
+        srllc_entry = library_linking_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+
     # Dispatch event entry using libeb.
-    if entry:
-        libeb.emit_event(entry)
+    if srsc_entry:
+        libeb.emit_event(srsc_entry)
+    if srssc_entry:
+        libeb.emit_event(srssc_entry)
+    if srllc_entry:
+        libeb.emit_event(srllc_entry)
 
     resp_msg = {
         "message": f"BSSH ENS event processing complete",

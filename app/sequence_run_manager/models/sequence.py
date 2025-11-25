@@ -95,7 +95,10 @@ class Sequence(OrcaBusBaseModel):
 
     # mandatory non-nullable base fields
     sequence_run_id = models.CharField(max_length=255, null=False, blank=False)  # unique key, legacy `run_id`
-    sample_sheet_name = models.CharField(max_length=255, null=False, blank=False)
+
+    # NOTE: sample_sheet_name is nullable in BSSH event, but we use UNKNOWN_VALUE to represent the absence of sample sheet
+    # https://github.com/OrcaBus/service-sequence-run-manager/issues/28
+    sample_sheet_name = models.CharField(max_length=255, null=True, blank=True)
 
     # nullable base fields only for fake sequence runs (refer: https://github.com/umccr/orcabus/issues/947)
     status = models.CharField(choices=SequenceStatus.choices, max_length=255, null=True, blank=True)
