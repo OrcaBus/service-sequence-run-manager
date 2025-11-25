@@ -60,7 +60,7 @@ def emit_srm_api_event(event):
     """
 
     # construct event
-    source = "orcabus.sequencerunmanagerapi"
+    source = "orcabus.sequencerunmanager"
     supported_event_types = ["SequenceRunSampleSheetChange", "SequenceRunLibraryLinkingChange"]
     event_bus_name = os.environ.get("EVENT_BUS_NAME", None)
 
