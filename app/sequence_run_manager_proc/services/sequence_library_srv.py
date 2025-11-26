@@ -56,11 +56,13 @@ def update_sequence_run_libraries_linking(sequence_run: Sequence, linked_librari
         logger.error(f"Error creating library associations for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
         return
 
-def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict)->Optional[LibraryLinkingDomain]:
+def check_sequence_run_libraries_linking_from_bssh_event(payload: dict, force_check: bool = False)->Optional[LibraryLinkingDomain]:
     """
     Check if libraries are linked to the sequence run;
     if not, create the linking.
     If there's an error (API call error, no files, no content), log the error and continue.
+    if force_check set to be true (when do final check or is conversion sequence) , we will stil check the libraries even if they are already linked
+    otherwise, we will skip checking if libraries are already linked
     """
     assert payload["id"] is not None, "sequence run id is required"
     assert payload["sampleSheetName"] is not None, "sample sheet name is required"
@@ -69,6 +71,11 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
         logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence run libraries linking")
+        return
+
+    # check if there is any library association for this sequence run, if so, skip creation
+    if not force_check and LibraryAssociation.objects.filter(sequence=sequence_run).exists():
+        logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, skipping creation")
         return
 
     linked_libraries = []

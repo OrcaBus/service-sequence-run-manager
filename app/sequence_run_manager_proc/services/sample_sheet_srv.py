@@ -4,6 +4,7 @@ import ulid
 import logging
 import base64
 import gzip
+import json
 from typing import Optional
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
@@ -28,6 +29,11 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
         logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet")
+        return None
+
+    # check if this sequence run already has sample sheet, if so, skip creation
+    if SampleSheet.objects.filter(sequence=sequence_run).exists():
+        logger.info(f"Sample sheet already exists for sequence {payload['id']}, skipping creation")
         return None
 
     try:
@@ -113,11 +119,12 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
     else:
         logger.info(f"No library linking found in samplesheet for sequence run {sequence_run.sequence_run_id}")
 
-def create_sequence_sample_sheet_from_reconversion_event(payload: dict)->Optional[SampleSheetDomain]:
+def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleSheetDomain]:
     """
     Check if the sample sheet for a sequence exists;
     if not, create it by making BSSH API call.
     If there's an error (API call error, no files, no content), log the error and continue.
+    if sample shett exist ,will check if the content is the same, if different, update the sample sheet content, if not return none, if not exists, create a new sample sheet
     """
     assert payload["id"] is not None, "sequence run id is required"
     assert payload["apiUrl"] is not None, "api url is required"
@@ -132,47 +139,61 @@ def create_sequence_sample_sheet_from_reconversion_event(payload: dict)->Optiona
     api_url = payload["apiUrl"]
     sample_sheet_name = payload["sampleSheetName"]
 
-    # Check if sample sheet already exists before making API call
-    if SampleSheet.objects.filter(sequence=sequence_run, sample_sheet_name=sample_sheet_name).exists():
-        logger.info(f"Sample sheet {sample_sheet_name} already exists for sequence {sequence_run.sequence_run_id}, skipping creation")
-        return None
-
     try:
         bssh_srv = BSSHService()
         sample_sheet_content = bssh_srv.get_sample_sheet_from_bssh_run_files(api_url, sample_sheet_name)
     except Exception as e:
-        logger.error(f"Error getting sample sheet {sample_sheet_name} from BSSH API for sequence {sequence_run.sequence_run_id} at {api_url}: {str(e)}. Will retry on next state change.")
+        logger.error(f"Error getting sample sheet {sample_sheet_name} from BSSH API for sequence {sequence_run.sequence_run_id} at {api_url}: {str(e)}.")
         return None
 
     if not sample_sheet_content:
-        logger.warning(f"Sample sheet {sample_sheet_name} not found for sequence {sequence_run.sequence_run_id} at {api_url}. Will retry on next state change.")
+        logger.warning(f"Sample sheet {sample_sheet_name} not found for sequence {sequence_run.sequence_run_id} at {api_url}.")
         return None
 
     try:
         content_dict = parse_samplesheet(sample_sheet_content)
     except Exception as e:
-        logger.error(f"Error parsing sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
+        logger.error(f"Error parsing sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}.")
         return None
 
-    sample_sheet_obj = SampleSheet(
-            sequence=sequence_run,
-            sample_sheet_name=sample_sheet_name,
-            sample_sheet_content=content_dict,
-        )
-    try:
-        sample_sheet_obj.save()
-        logger.info(f"Successfully created sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from reconversion event")
-        return SampleSheetDomain(
-            instrument_run_id=sequence_run.instrument_run_id,
-            sequence_run_id=sequence_run.sequence_run_id,
-            sample_sheet=sample_sheet_obj,
-            samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
-            sample_sheet_has_changed=True,
-        )
-    except Exception as e:
-        logger.error(f"Error saving sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
-        return None
-
+    # Check if sample sheet already exists , if already exists, compare the content, if different, update the sample sheet content, if not return none
+    # if not exists, create a new sample sheet
+    if SampleSheet.objects.filter(sequence=sequence_run, sample_sheet_name=sample_sheet_name).exists():
+        sample_sheet_obj = SampleSheet.objects.get(sequence=sequence_run, sample_sheet_name=sample_sheet_name)
+        if sample_sheet_obj.sample_sheet_content != content_dict:
+            logger.info(f"Sample sheet {sample_sheet_name} content is different for sequence {sequence_run.sequence_run_id} from bssh event")
+            sample_sheet_obj.sample_sheet_content = content_dict
+            sample_sheet_obj.save()
+            logger.info(f"Updated sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event")
+            return SampleSheetDomain(
+                instrument_run_id=sequence_run.instrument_run_id,
+                sequence_run_id=sequence_run.sequence_run_id,
+                sample_sheet=sample_sheet_obj,
+                samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
+                sample_sheet_has_changed=True,
+            )
+        else:
+            logger.info(f"Sample sheet {sample_sheet_name} content is the same for sequence {sequence_run.sequence_run_id} from reconversion event")
+            return None
+    else:
+        try:
+            sample_sheet_obj = SampleSheet(
+                sequence=sequence_run,
+                sample_sheet_name=sample_sheet_name,
+                sample_sheet_content=content_dict,
+            )
+            sample_sheet_obj.save()
+            logger.info(f"Successfully created sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from reconversion event")
+            return SampleSheetDomain(
+                instrument_run_id=sequence_run.instrument_run_id,
+                sequence_run_id=sequence_run.sequence_run_id,
+                sample_sheet=sample_sheet_obj,
+                samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
+                sample_sheet_has_changed=True,
+            )
+        except Exception as e:
+            logger.error(f"Error creating sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
+            return None
 
 @transaction.atomic
 def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Optional[SampleSheet], Optional[str]]:
