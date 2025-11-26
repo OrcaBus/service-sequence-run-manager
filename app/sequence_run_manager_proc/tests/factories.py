@@ -3,10 +3,10 @@ from sequence_run_manager.tests.factories import TestConstant
 class SequenceRunManagerProcFactory:
     def bssh_event_message(mock_run_status: str = "New"):
         mock_sequence_run_id = TestConstant.sequence_run_id.value
-        mock_sequence_run_name = mock_sequence_run_id
+        mock_instrument_run_id = TestConstant.instrument_run_id.value
+        mock_sequence_run_name = mock_instrument_run_id
         mock_date_modified = "2020-05-09T22:17:03.1015272Z"
         mock_status = mock_run_status
-        mock_instrument_run_id = TestConstant.instrument_run_id.value
 
         sequence_run_message = {
             "gdsFolderPath": f"/Runs/{mock_sequence_run_name}_{mock_sequence_run_id}",
@@ -24,6 +24,11 @@ class SequenceRunManagerProcFactory:
             "instrumentRunId": mock_instrument_run_id,
             "status": mock_status,
         }
+
+        if mock_run_status == "Uploading":
+            sequence_run_message.pop("name", None)
+            sequence_run_message.pop("instrumentRunId", None)
+            sequence_run_message.pop("flowcellBarcode", None)
 
         orcabus_event_message = {
             "version": "0",

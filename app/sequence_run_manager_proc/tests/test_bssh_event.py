@@ -93,7 +93,7 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         """
         when(libssm).get_ssm_param(...).thenReturn(libjson.dumps([]))
 
-        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message(), None)
+        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('Uploading'), None)
 
         qs = Sequence.objects.filter(
             sequence_run_id=TestConstant.sequence_run_id.value
@@ -103,11 +103,27 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         self.assertEqual(1, qs.count())
         qs_states = State.objects.filter(sequence=seq)
         self.assertEqual(1, qs_states.count())
-        verify(libeb, times=3).eb_client(...)  # 3 events should fire: SequenceRunStateChange, SequenceRunSampleSheetChange, SequenceRunLibraryLinkingChange
+        verify(libeb, times=1).eb_client(...)  # 1 event should fire: SequenceRunStateChange
 
-        # test event update
+        # test event update to default NEW status
+        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message(), None)
+
+        qs = Sequence.objects.filter(
+            sequence_run_id=TestConstant.sequence_run_id.value
+        )
+        seq = qs.get()
+        logger.info(f"Found SequenceRun record from db: {seq}")
+        self.assertEqual(1, qs.count())
+        qs_states = State.objects.filter(sequence=seq)
+        self.assertEqual(2, qs_states.count())
+        qs_sample_sheet = SampleSheet.objects.filter(sequence=seq)
+        self.assertEqual(1, qs_sample_sheet.count())
+        qs_libraries = LibraryAssociation.objects.filter(sequence=seq)
+        self.assertEqual(2, qs_libraries.count())
+        verify(libeb, times=3).eb_client(...)  # 2 new events should fire: SequenceRunSampleSheetChange, SequenceRunLibraryLinkingChange
+
+        # test event update to completed status
         _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('Complete'), None)
-
         qs = Sequence.objects.filter(
             sequence_run_id=TestConstant.sequence_run_id.value
         )
@@ -115,15 +131,25 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertEqual(SequenceStatus.SUCCEEDED, seq.status)
         qs_states = State.objects.filter(sequence=seq)
-        self.assertEqual(2, qs_states.count())
-        qs_sample_sheet = SampleSheet.objects.filter(sequence=seq)
-        self.assertEqual(1, qs_sample_sheet.count())
-        qs_libraries = LibraryAssociation.objects.filter(sequence=seq)
-        self.assertEqual(2, qs_libraries.count())
+        self.assertEqual(3, qs_states.count())
+        verify(libeb, times=4).eb_client(...)  # 1 new event should fire: SequenceRunStatusChange
+
+        # test event with conversion sequence (pending analysis status)
+        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('PendingAnalysis'), None)
+        qs = Sequence.objects.filter(
+            sequence_run_id=TestConstant.sequence_run_id.value
+        )
+        seq = qs.get()
+        logger.info(f"Found SequenceRun record from db: {seq}")
+        self.assertEqual(SequenceStatus.SUCCEEDED, seq.status)
+        qs_states = State.objects.filter(sequence=seq)
+        self.assertEqual(4, qs_states.count())
+        verify(libeb, times=4).eb_client(...)  # no events should fire
 
         # clear db records
         qs_sample_sheet.delete()
         qs_states.delete()
+        qs_libraries.delete()
         seq.delete()
 
     def test_event_handler_emergency_stop(self):

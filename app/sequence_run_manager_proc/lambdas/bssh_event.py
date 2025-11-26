@@ -126,24 +126,27 @@ def event_handler(event, context):
     if sequence_domain.state_has_changed:
         sequence_state_srv.create_sequence_state_from_bssh_event(event_details)
 
+    sample_sheet_domain: Optional[SampleSheetDomain] = None
+    library_linking_domain: Optional[LibraryLinkingDomain] = None
+
     # Check or create sequence run libraries linking and sample sheet when we get new event
     if sequence_domain.state_has_changed and sequence_domain.sample_sheet_ready:
-        sample_sheet_domain: Optional[SampleSheetDomain] = sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
-        library_linking_domain: Optional[LibraryLinkingDomain] = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(
+        sample_sheet_domain = sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
+        library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(
             event_details,
             force_check=(sample_sheet_domain is not None) # if sample sheet domain is not None, we will always check the libraries linking
         )
 
         # final check at the terminal event could make sure the SS has not been changed half way through the process, and remains valid.
-        if sequence_domain.status_has_changed and SequenceStatus.is_terminal_status(sequence_domain.sequence.status):
+        if sequence_domain.status_has_changed and SequenceStatus.is_terminal(sequence_domain.sequence.status):
             logger.warning(f"Sequence run {sequence_domain.sequence.sequence_run_id} is in terminal status, final checking SS and LL")
-            sample_sheet_domain: SampleSheetDomain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
-            library_linking_domain: LibraryLinkingDomain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
+            sample_sheet_domain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
+            library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
 
     # Check or create sequence run libraries linking and sample sheet for reconversion
     if sequence_domain.is_reconversion:
-        sample_sheet_domain: SampleSheetDomain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
-        library_linking_domain: LibraryLinkingDomain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
+        sample_sheet_domain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
+        library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
 
     # Detect SequenceRunStatusChange and emit event
     if sequence_domain and sequence_domain.status_has_changed:
