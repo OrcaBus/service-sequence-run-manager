@@ -110,6 +110,17 @@ def event_handler(event, context):
     # Create or update Sequence record from BSSH Run event payload
     sequence_domain: SequenceDomain = sequence_srv.create_or_update_sequence_from_bssh_event(event_details)
 
+    # check if the sequence run is in emergency stop list, if so, abort the pipeline
+    try:
+        SequenceRule(sequence_domain.sequence).must_not_emergency_stop()
+    except SequenceRuleError as se:
+        # FIXME emit custom event for this? something to tackle later. log & skip for now
+        resp_msg = {
+            "message": f"Aborted pipeline due to Emergency Stop: {se}",
+        }
+        logger.warning(libjson.dumps(resp_msg))
+        return resp_msg
+
     # Create SequenceRunState record from BSSH Run event payload
     if sequence_domain.state_has_changed:
         sequence_state_srv.create_sequence_state_from_bssh_event(event_details)
@@ -124,36 +135,29 @@ def event_handler(event, context):
         sample_sheet_domain: SampleSheetDomain = sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
         library_linking_domain: LibraryLinkingDomain = sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
 
-    # Detect SequenceRunStatusChange
-    if sequence_domain.status_has_changed:
-        try:
-            SequenceRule(sequence_domain.sequence).must_not_emergency_stop()
-            entry = sequence_domain.to_put_events_request_entry(
-                    event_bus_name=event_bus_name,
-            )
+    # Detect SequenceRunStatusChange and emit event
+    if sequence_domain and sequence_domain.status_has_changed:
+        srsc_entry = sequence_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+        libeb.emit_event(srsc_entry)
+        logger.info(f"Emitted SequenceRunStateChange event: {srsc_entry}")
 
-        except SequenceRuleError as se:
-            # FIXME emit custom event for this? something to tackle later. log & skip for now
-            reason = f"Aborted pipeline due to {se}"
-            logger.warning(reason)
-
+    # Detect SequenceRunSampleSheetChange and emit event
     if sample_sheet_domain and sample_sheet_domain.sample_sheet_has_changed:
         srssc_entry = sample_sheet_domain.to_put_events_request_entry(
             event_bus_name=event_bus_name,
         )
+        libeb.emit_event(srssc_entry)
+        logger.info(f"Emitted SequenceRunSampleSheetChange event: {srssc_entry}")
 
+    # Detect SequenceRunLibraryLinkingChange and emit event
     if library_linking_domain and library_linking_domain.library_linking_has_changed:
         srllc_entry = library_linking_domain.to_put_events_request_entry(
             event_bus_name=event_bus_name,
         )
-
-    # Dispatch event entry using libeb.
-    if srsc_entry:
-        libeb.emit_event(srsc_entry)
-    if srssc_entry:
-        libeb.emit_event(srssc_entry)
-    if srllc_entry:
         libeb.emit_event(srllc_entry)
+        logger.info(f"Emitted SequenceRunLibraryLinkingChange event: {srllc_entry}")
 
     resp_msg = {
         "message": f"BSSH ENS event processing complete",

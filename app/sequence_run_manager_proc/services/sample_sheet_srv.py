@@ -35,12 +35,12 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
         if not sample_sheet or not samplesheet_content:
             logger.error(f"Error creating sample sheet for sequence {payload['id']}.")
             return None
-        samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content)).decode('utf-8')
+        samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content.encode('utf-8'))).decode('utf-8')
         return SampleSheetDomain(
             instrument_run_id=sequence_run.instrument_run_id,
             sequence_run_id=sequence_run.sequence_run_id,
-            sample_sheet_name=sequence_run.sample_sheet_name,
-            sample_sheet_base64_gz=samplesheet_base64_gz,
+            sample_sheet=sample_sheet,
+            samplesheet_base64_gz=samplesheet_base64_gz,
             sample_sheet_has_changed=True,
         )
     except Exception as e:
@@ -165,8 +165,8 @@ def create_sequence_sample_sheet_from_reconversion_event(payload: dict)->Optiona
         return SampleSheetDomain(
             instrument_run_id=sequence_run.instrument_run_id,
             sequence_run_id=sequence_run.sequence_run_id,
-            sample_sheet_name=sample_sheet_name,
-            sample_sheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content)).decode('utf-8'),
+            sample_sheet=sample_sheet_obj,
+            samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
             sample_sheet_has_changed=True,
         )
     except Exception as e:
@@ -175,7 +175,7 @@ def create_sequence_sample_sheet_from_reconversion_event(payload: dict)->Optiona
 
 
 @transaction.atomic
-def create_sequence_sample_sheet(sequence: Sequence, payload: dict)->Optional[SampleSheet, str]:
+def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Optional[SampleSheet], Optional[str]]:
     """
     Create a sample sheet for a sequence.
     Check if sample sheet already exists before making API call.
@@ -192,7 +192,7 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict)->Optional[Sa
         sample_sheet_contents = bssh_srv.get_all_sample_sheet_from_bssh_run_files(api_url)
     except Exception as e:
         logger.error(f"Error getting sample sheet files from BSSH API for sequence {sequence.sequence_run_id} at {api_url}: {str(e)}. Will retry on next state change.")
-        return None, None
+        raise e
 
     if not sample_sheet_contents:
         logger.warning(f"No sample sheet files found for sequence {sequence.sequence_run_id} at {api_url}. Will retry on next state change.")

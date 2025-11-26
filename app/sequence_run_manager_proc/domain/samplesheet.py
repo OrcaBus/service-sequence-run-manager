@@ -31,7 +31,7 @@ class SampleSheetDomain:
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
-            timeStamp=self.sample_sheet.association_timestamp,
+            timeStamp=self.sample_sheet.association_timestamp.isoformat(),
             sampleSheetName=self.sample_sheet.sample_sheet_name,
             samplesheetBase64gz=self.samplesheet_base64_gz,
             comment=None,

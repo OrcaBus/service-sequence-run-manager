@@ -103,7 +103,7 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         self.assertEqual(1, qs.count())
         qs_states = State.objects.filter(sequence=seq)
         self.assertEqual(1, qs_states.count())
-        verify(libeb, times=1).eb_client(...)  # event should fire
+        verify(libeb, times=3).eb_client(...)  # 3 events should fire: SequenceRunStateChange, SequenceRunSampleSheetChange, SequenceRunLibraryLinkingChange
 
         # test event update
         _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('Complete'), None)

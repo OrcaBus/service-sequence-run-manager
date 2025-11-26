@@ -119,10 +119,18 @@ def check_or_create_sequence_run_libraries_linking_from_bssh_event(payload: dict
     try:
         create_sequence_run_libraries_linking(sequence_run, linked_libraries)
         logger.info(f"Library associations created for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
+
+        # Get timestamp from sample sheet if available, otherwise use current time
+        if sample_sheet and sample_sheet.association_timestamp:
+            timestamp = sample_sheet.association_timestamp.isoformat()
+        else:
+            timestamp = timezone.now().isoformat()
+
         return LibraryLinkingDomain(
             instrument_run_id=sequence_run.instrument_run_id,
             sequence_run_id=sequence_run.sequence_run_id,
             linked_libraries=linked_libraries,
+            timestamp=timestamp,
             library_linking_has_changed=True,
         )
     except Exception as e:

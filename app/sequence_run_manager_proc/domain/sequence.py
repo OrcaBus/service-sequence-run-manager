@@ -73,6 +73,7 @@ class SequenceDomain:
             detail=self.to_event(),
         )
 
+
     def to_put_events_request_entry(
             self, event_bus_name: str, trace_header: str = ""
     ) -> dict:

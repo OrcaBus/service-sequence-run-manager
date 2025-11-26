@@ -12,6 +12,7 @@ class LibraryLinkingDomain:
     instrument_run_id: str
     sequence_run_id: str
     linked_libraries: list[str]
+    timestamp: str  # ISO format timestamp string
 
     # flag to indicate if library linking changed
     library_linking_has_changed: bool = False
@@ -28,7 +29,7 @@ class LibraryLinkingDomain:
         return SequenceRunLibraryLinkingChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
-            timeStamp=self.sample_sheet.association_timestamp,
+            timeStamp=self.timestamp,
             linkedLibraries=self.linked_libraries,
         )
 
