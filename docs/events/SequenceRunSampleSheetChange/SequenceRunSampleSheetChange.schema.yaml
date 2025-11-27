@@ -44,6 +44,7 @@ definitions:
         type: string
       timeStamp:
         type: string
+        format: date-time
       sampleSheetName:
         type: string
       samplesheetBase64gz:

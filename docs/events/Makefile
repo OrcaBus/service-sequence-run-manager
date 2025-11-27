@@ -24,3 +24,11 @@ test:
 	@check-jsonschema --schemafile SequenceRunSampleSheetChange/SequenceRunSampleSheetChange.schema.json SequenceRunSampleSheetChange/examples/SRSSC.json
 	@echo "Testing SequenceRunLibraryLinkingChange"
 	@check-jsonschema --schemafile SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json SequenceRunLibraryLinkingChange/examples/SRLLC.json
+
+help:
+	@echo "Usage: make <target>"
+	@echo "Targets:"
+	@echo "  install - Install dependencies"
+	@echo "  gen-schema - Generate schema files"
+	@echo "  json - Validate JSON examples"
+	@echo "  test - Validate JSON examples against schema"

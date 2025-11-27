@@ -1,9 +1,10 @@
 import json
 import logging
 from dataclasses import dataclass
+from typing import Optional
 
-from sequence_run_manager.models import SampleSheet
-from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent
+from sequence_run_manager.models import SampleSheet, Comment
+from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent, Comment as CommentEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -15,6 +16,7 @@ class SampleSheetDomain:
     instrument_run_id: str
     sequence_run_id: str
     samplesheet_base64_gz: str
+    comment: Optional[Comment] = None
 
     # flag to indicate if sample sheet changed
     sample_sheet_has_changed: bool = False
@@ -28,13 +30,20 @@ class SampleSheetDomain:
         return SequenceRunSampleSheetChange.__name__
 
     def to_event(self) -> SequenceRunSampleSheetChange:
+        comment_event = None
+        if self.comment:
+            comment_event = CommentEvent(
+                comment=self.comment.comment,
+                created_by=self.comment.created_by,
+                created_at=self.comment.created_at,
+            )
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
-            timeStamp=self.sample_sheet.association_timestamp.isoformat(),
+            timeStamp=self.sample_sheet.association_timestamp,
             sampleSheetName=self.sample_sheet.sample_sheet_name,
             samplesheetBase64gz=self.samplesheet_base64_gz,
-            comment=None,
+            comment=comment_event,
         )
 
     def to_event_with_envelope(self) -> AWSEvent:
