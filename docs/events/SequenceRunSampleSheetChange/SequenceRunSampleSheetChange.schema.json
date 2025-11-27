@@ -20,7 +20,7 @@
         "sampleSheetName": {
           "type": "string"
         },
-        "samplesheetbase64gz": {
+        "samplesheetBase64gz": {
           "type": "string"
         },
         "comment": {

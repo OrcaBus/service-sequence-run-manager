@@ -7,13 +7,16 @@ django.setup()
 # --- keep ^^^ at top of the module
 
 import logging
-
+from typing import Optional
 from sequence_run_manager_proc.domain.sequence import (
     SequenceDomain,
     SequenceRule,
     SequenceRuleError,
-    SequenceStatus,
+    SequenceStatus
 )
+from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
+from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
+
 from sequence_run_manager_proc.services import sequence_srv, sequence_state_srv, sequence_library_srv, sample_sheet_srv
 
 from libumccr import libjson
@@ -101,41 +104,73 @@ def event_handler(event, context):
     # Extract relevant fields from the event payload
     event_details = event.get("detail", {}).get("ica-event", {})
 
+    srsc_entry = None
+    srssc_entry = None
+    srllc_entry = None
+
     # Create or update Sequence record from BSSH Run event payload
-    sequence_domain: SequenceDomain = (
-        sequence_srv.create_or_update_sequence_from_bssh_event(event_details)
-    )
-    entry = None
+    sequence_domain: SequenceDomain = sequence_srv.create_or_update_sequence_from_bssh_event(event_details)
+
+    # check if the sequence run is in emergency stop list, if so, abort the pipeline
+    try:
+        SequenceRule(sequence_domain.sequence).must_not_emergency_stop()
+    except SequenceRuleError as se:
+        # FIXME emit custom event for this? something to tackle later. log & skip for now
+        resp_msg = {
+            "message": f"Aborted pipeline due to Emergency Stop: {se}",
+        }
+        logger.warning(libjson.dumps(resp_msg))
+        return resp_msg
 
     # Create SequenceRunState record from BSSH Run event payload
     if sequence_domain.state_has_changed:
         sequence_state_srv.create_sequence_state_from_bssh_event(event_details)
 
-    # Check or create sequence run libraries linking and sample sheet when events uploaded finished (terminal status)
-    if sequence_domain.status_has_changed and SequenceStatus.is_terminal(sequence_domain.sequence.status):
-        sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
-        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
+    sample_sheet_domain: Optional[SampleSheetDomain] = None
+    library_linking_domain: Optional[LibraryLinkingDomain] = None
 
-    if sequence_domain.is_reconversion_sequence:
-        sample_sheet_srv.create_sequence_sample_sheet_from_reconversion_event(event_details)
-        sequence_library_srv.check_or_create_sequence_run_libraries_linking_from_bssh_event(event_details)
+    # Check or create sequence run libraries linking and sample sheet when we get new event
+    if sequence_domain.state_has_changed and sequence_domain.sample_sheet_ready:
+        sample_sheet_domain = sample_sheet_srv.create_sequence_sample_sheet_from_bssh_event(event_details)
+        library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(
+            event_details,
+            force_check=(sample_sheet_domain is not None) # if sample sheet domain is not None, we will always check the libraries linking
+        )
 
-    # Detect SequenceRunStatusChange
-    if sequence_domain.status_has_changed:
-        try:
-            SequenceRule(sequence_domain.sequence).must_not_emergency_stop()
-            entry = sequence_domain.to_put_events_request_entry(
-                    event_bus_name=event_bus_name,
-            )
+        # final check at the terminal event could make sure the SS has not been changed half way through the process, and remains valid.
+        if sequence_domain.status_has_changed and SequenceStatus.is_terminal(sequence_domain.sequence.status):
+            logger.warning(f"Sequence run {sequence_domain.sequence.sequence_run_id} is in terminal status, final checking SS and LL")
+            sample_sheet_domain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
+            library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
 
-        except SequenceRuleError as se:
-            # FIXME emit custom event for this? something to tackle later. log & skip for now
-            reason = f"Aborted pipeline due to {se}"
-            logger.warning(reason)
+    # Check or create sequence run libraries linking and sample sheet for reconversion
+    if sequence_domain.is_reconversion:
+        sample_sheet_domain = sample_sheet_srv.check_sequence_sample_sheet_from_bssh_event(event_details)
+        library_linking_domain = sequence_library_srv.check_sequence_run_libraries_linking_from_bssh_event(event_details, force_check=(sample_sheet_domain is not None))
 
-    # Dispatch event entry using libeb.
-    if entry:
-        libeb.emit_event(entry)
+    # Detect SequenceRunStatusChange and emit event
+    if sequence_domain and sequence_domain.status_has_changed:
+        srsc_entry = sequence_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+        libeb.emit_event(srsc_entry)
+        logger.info(f"Emitted SequenceRunStateChange event: {srsc_entry}")
+
+    # Detect SequenceRunSampleSheetChange and emit event
+    if sample_sheet_domain and sample_sheet_domain.sample_sheet_has_changed:
+        srssc_entry = sample_sheet_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+        libeb.emit_event(srssc_entry)
+        logger.info(f"Emitted SequenceRunSampleSheetChange event: {srssc_entry}")
+
+    # Detect SequenceRunLibraryLinkingChange and emit event
+    if library_linking_domain and library_linking_domain.library_linking_has_changed:
+        srllc_entry = library_linking_domain.to_put_events_request_entry(
+            event_bus_name=event_bus_name,
+        )
+        libeb.emit_event(srllc_entry)
+        logger.info(f"Emitted SequenceRunLibraryLinkingChange event: {srllc_entry}")
 
     resp_msg = {
         "message": f"BSSH ENS event processing complete",

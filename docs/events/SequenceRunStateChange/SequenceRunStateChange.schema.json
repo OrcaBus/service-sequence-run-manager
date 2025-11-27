@@ -33,7 +33,7 @@
           "type": "string"
         },
         "sampleSheetName": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "startTime": {
           "type": "string",

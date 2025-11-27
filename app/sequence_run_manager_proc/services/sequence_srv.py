@@ -98,11 +98,14 @@ def create_new_sequence(run_id: str, payload: Dict, status: SequenceStatus, timi
         run_folder_path=payload.get("gdsFolderPath"),
         run_data_uri=f"{SequenceConfig.GDS_URI_SCHEME}{payload.get('gdsVolumeName')}{payload.get('gdsFolderPath')}",
         reagent_barcode=payload.get("reagentBarcode"),
-        sample_sheet_name=payload.get("sampleSheetName"),
         v1pre3_id=payload.get("v1pre3Id"),
         ica_project_id=payload.get("icaProjectId"),
         api_url=payload.get("apiUrl"),
-        # optional fields when 'Uploading' stage
+
+        # NOTE: sample_sheet_name is nullable in BSSH event, but we use UNKNOWN_VALUE to represent the absence of sample sheet
+        # https://github.com/OrcaBus/service-sequence-run-manager/issues/28
+        sample_sheet_name=payload.get("sampleSheetName", SequenceConfig.UNKNOWN_VALUE),
+        # optional fields in early stage of the run ('Uploading' stage)
         instrument_run_id=payload.get("instrumentRunId", SequenceConfig.UNKNOWN_VALUE),
         flowcell_barcode=payload.get("flowcellBarcode", SequenceConfig.UNKNOWN_VALUE),
         sequence_run_name=payload.get("name", SequenceConfig.UNKNOWN_VALUE),
@@ -127,11 +130,15 @@ def enrich_sequence_with_run_details(sequence: Sequence, api_url: str) -> None:
 
 def update_existing_sequence(sequence: Sequence, payload: Dict) -> Sequence:
     """Update an existing sequence record"""
+
     # Update basic fields if they were UNKNOWN
     if sequence.instrument_run_id == SequenceConfig.UNKNOWN_VALUE and payload.get("instrumentRunId"):
         sequence.instrument_run_id = payload.get("instrumentRunId", SequenceConfig.UNKNOWN_VALUE)
         sequence.sequence_run_name = payload.get("name", SequenceConfig.UNKNOWN_VALUE)
         sequence.flowcell_barcode = payload.get("flowcellBarcode", SequenceConfig.UNKNOWN_VALUE)
+    # Update sample sheet name if it was UNKNOWN
+    if sequence.sample_sheet_name == SequenceConfig.UNKNOWN_VALUE and payload.get("sampleSheetName"):
+        sequence.sample_sheet_name = payload.get("sampleSheetName", SequenceConfig.UNKNOWN_VALUE)
 
     logger.info(f"Updating Sequence successfully (sequence_run_id={sequence.sequence_run_id}, instrument_run_id={sequence.instrument_run_id})")
 
@@ -143,30 +150,37 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
     Create SequenceDomain with change tracking
 
     state_changed to be true if:
-    - new state is created (state has unique status, timestamp combination)
+    - new state is created (state has unique status, timestamp combination as duplicate events detection)
 
     status_changed to be true if:
     - new sequence is created
     - sequence status has changed and current sequence status is not SequenceStatus.SUCCEEDED ('pendinganalysis','analyzing',etc means sequence run is succeeded, any failed or aborted state after that is coming from analysis stage which is not relevant to this sequence run)
 
-    is_reconversion_sequence to be true if:
+    is_reconversion to be true if:
     - "pendinganalysis" state after terminal('complete','failed','aborted', etc) state
+
+    sample_sheet_ready to be true if:
+    - sample sheet name and instrument run id are not UNKNOWN_VALUE or None
 
     """
 
     # check if state exists
     state_exists = State.objects.filter(sequence=sequence,timestamp=timing_info['start_time'],status=state).exists()
 
+    # check instrument upload complete
+    sample_sheet_ready = (sequence.sample_sheet_name is not None and sequence.sample_sheet_name != SequenceConfig.UNKNOWN_VALUE) and (sequence.instrument_run_id is not None and sequence.instrument_run_id != SequenceConfig.UNKNOWN_VALUE)
+
     if state_exists:
         return SequenceDomain(
             sequence=sequence,
             status_has_changed=False,
             state_has_changed=False,
-            is_reconversion_sequence=False
+            is_reconversion=False,
+            sample_sheet_ready=sample_sheet_ready
         )
 
     status_changed = is_new_sequence or (sequence.status != status.value and sequence.status != SequenceStatus.SUCCEEDED.value)
-    is_reconversion_sequence = state.lower() == "pendinganalysis" and sequence.status == SequenceStatus.SUCCEEDED.value
+    is_reconversion = state.lower() == "pendinganalysis" and sequence.status == SequenceStatus.SUCCEEDED.value
 
     logger.info(f"Creating SequenceDomain (sequence_run_id={sequence.sequence_run_id}, status={status.value}, new_sequence_created={is_new_sequence})")
     # update status and end time if status has changed
@@ -180,5 +194,6 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
         sequence=sequence,
         status_has_changed=status_changed,
         state_has_changed=True,
-        is_reconversion_sequence=is_reconversion_sequence
+        is_reconversion=is_reconversion,
+        sample_sheet_ready=sample_sheet_ready
     )
