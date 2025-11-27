@@ -44,6 +44,7 @@ export interface SequenceRunManagerStackProps {
   bsshTokenSecretName: string;
   slackTopicName: string;
   orcabusUIBaseUrl: string;
+  sequenceRunManagerBaseApiUrl: string;
 }
 
 export class SequenceRunManagerStack extends Stack {
@@ -122,6 +123,7 @@ export class SequenceRunManagerStack extends Stack {
       PG_USER: this.SEQUENCE_RUN_MANAGER_DB_USER,
       PG_DB_NAME: this.SEQUENCE_RUN_MANAGER_DB_NAME,
       BASESPACE_ACCESS_TOKEN_SECRET_ID: props.bsshTokenSecretName,
+      SEQUENCE_RUN_MANAGER_BASE_API_URL: props.sequenceRunManagerBaseApiUrl,
     };
 
     this.baseLayer = new PythonLayerVersion(this, this.stackName + 'BaseLayer', {

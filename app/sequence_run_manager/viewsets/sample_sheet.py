@@ -21,6 +21,25 @@ class SampleSheetViewSet(ViewSet):
 
     @extend_schema(
         responses={
+            200: SampleSheetSerializer(many=True),
+            404: OpenApiResponse(description="No sample sheets found for this sequence.")
+        },
+        operation_id="get_sequence_sample_sheets"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheets", url_path="sample_sheets")
+    def sample_sheets(self, request, *args, **kwargs):
+        """
+        Returns all active SampleSheet records for a sequence.
+        """
+        # pk is the orcabus_id since it's the primary key
+        sequence = get_object_or_404(Sequence, orcabus_id=kwargs.get('pk'))
+        sample_sheets = SampleSheet.objects.filter(sequence=sequence, association_status='active')
+        if not sample_sheets.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(SampleSheetSerializer(sample_sheets, many=True).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={
             200: SampleSheetSerializer,
             404: OpenApiResponse(description="No active sample sheet found for this sequence.")
         },
@@ -29,11 +48,20 @@ class SampleSheetViewSet(ViewSet):
     @action(detail=True, methods=["get"], url_name="sample_sheet", url_path="sample_sheet")
     def sample_sheet(self, request, *args, **kwargs):
         """
-        Returns a queryset containing a single SampleSheet record or an empty queryset.
+        Returns a single active SampleSheet record for a sequence that matches the sequence's sample_sheet_name.
         """
-
-        sample_sheet = SampleSheet.objects.filter(sequence_id = kwargs.get('pk'), association_status='active').first()
-        if sample_sheet:
-            return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
-        else:
+        # pk is the orcabus_id since it's the primary key
+        sequence_run = get_object_or_404(Sequence, orcabus_id=kwargs.get('pk'))
+        if not sequence_run.sample_sheet_name:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            sample_sheet = SampleSheet.objects.get(
+                sequence=sequence_run,
+                association_status='active',
+                sample_sheet_name=sequence_run.sample_sheet_name
+            )
+        except SampleSheet.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)

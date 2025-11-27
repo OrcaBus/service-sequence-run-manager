@@ -24,6 +24,12 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
     PROD: 'https://orcaui.umccr.org',
   };
 
+  const sequenceRunManagerBaseApiUrlDict: Record<StageName, string> = {
+    BETA: 'https://sequence.dev.umccr.org',
+    GAMMA: 'https://sequence.stg.umccr.org',
+    PROD: 'https://sequence.prod.umccr.org',
+  };
+
   return {
     vpcProps: VPC_LOOKUP_PROPS,
     lambdaSecurityGroupName: SHARED_SECURITY_GROUP_NAME,
@@ -36,5 +42,6 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
     bsshTokenSecretName: basespaceAccessTokenSecretName,
     slackTopicName: slackTopicNameDict[stage],
     orcabusUIBaseUrl: orcabusUIBaseUrlDict[stage],
+    sequenceRunManagerBaseApiUrl: sequenceRunManagerBaseApiUrlDict[stage],
   };
 };

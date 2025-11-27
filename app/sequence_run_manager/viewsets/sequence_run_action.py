@@ -123,8 +123,8 @@ class SequenceRunActionViewSet(ViewSet):
         logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}, and comment {comment_obj.orcabus_id} saved")
 
         # step 4: construct event bridge detail and emit event to event bridge
-        samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content)).decode('utf-8')
-        samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64_gz, sample_sheet, comment_obj)
+        # samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content)).decode('utf-8')
+        samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, sample_sheet, comment_obj)
 
         try:
             emit_srm_api_event(samplesheet_change_eb_payload)
@@ -173,7 +173,7 @@ class SequenceRunActionViewSet(ViewSet):
         return Response({"detail": "Samplesheet added successfully"}, status=status.HTTP_200_OK)
 
 
-def construct_samplesheet_change_eb_payload(sequence_run: Sequence, samplesheet_base64_gz: str, sample_sheet: SampleSheet, comment: Optional[Comment]) -> dict:
+def construct_samplesheet_change_eb_payload(sequence_run: Sequence, sample_sheet: SampleSheet, comment: Comment) -> dict:
     """
     Construct event bridge detail for samplesheet change based on the sequence run, sample sheet and comment
     """
@@ -182,8 +182,7 @@ def construct_samplesheet_change_eb_payload(sequence_run: Sequence, samplesheet_
         "instrumentRunId": sequence_run.instrument_run_id,
         "sequenceRunId": sequence_run.sequence_run_id,
         "sampleSheet": sample_sheet,
-        "samplesheetBase64gz": samplesheet_base64_gz,
-        "comment":comment
+        "description": f"Sample sheet {sample_sheet.sample_sheet_name} added for sequence run {sequence_run.sequence_run_id} through action API.\nComment: {comment.comment}",
     }
 
 

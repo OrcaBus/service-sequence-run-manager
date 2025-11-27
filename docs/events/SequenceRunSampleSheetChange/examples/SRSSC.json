@@ -12,11 +12,8 @@
     "sequenceRunId": "r.1234567890abcdefghijklmn",
     "timeStamp": "2024-04-27T03:45:02.113245Z",
     "sampleSheetName": "sampleSheet_v2.csv",
-    "samplesheetBase64gz": "base64_encoded_samplesheet........",
-    "comment": {
-      "comment": "comment",
-      "created_by": "user",
-      "created_at": "2024-04-27T03:45:02.113245Z"
-    }
+    "apiUrl": "https://sequence.prod.umccr.org/api/v1/sequence_run/seq.01234567890ABCDEF/sample_sheet/",
+    "checksum": "1234567890abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz",
+    "description": "description"
   }
 }

@@ -80,8 +80,7 @@ def emit_srm_api_event(event):
                 instrument_run_id=event["instrumentRunId"],
                 sequence_run_id=event["sequenceRunId"],
                 sample_sheet=event["sampleSheet"],
-                samplesheet_base64_gz=event["samplesheetBase64gz"],
-                comment=event["comment"],
+                description=event["description"],
             )
             event_entry = sample_sheet_domain.to_put_events_request_entry(
                 event_bus_name=event_bus_name,
