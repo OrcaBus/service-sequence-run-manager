@@ -41,12 +41,11 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
         if not sample_sheet or not samplesheet_content:
             logger.error(f"Error creating sample sheet for sequence {payload['id']}.")
             return None
-        samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content.encode('utf-8'))).decode('utf-8')
         return SampleSheetDomain(
             instrument_run_id=sequence_run.instrument_run_id,
             sequence_run_id=sequence_run.sequence_run_id,
             sample_sheet=sample_sheet,
-            samplesheet_base64_gz=samplesheet_base64_gz,
+            description=f"Sample sheet {sample_sheet.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from BSSH event",
             sample_sheet_has_changed=True,
         )
     except Exception as e:
@@ -169,7 +168,7 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
                 sample_sheet=sample_sheet_obj,
-                samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
+                description=f"Sample sheet {sample_sheet_name} updated for sequence {sequence_run.sequence_run_id} from bssh event",
                 sample_sheet_has_changed=True,
             )
         else:
@@ -188,7 +187,7 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
                 sample_sheet=sample_sheet_obj,
-                samplesheet_base64_gz=base64.b64encode(gzip.compress(sample_sheet_content.encode('utf-8'))).decode('utf-8'),
+                description=f"Sample sheet {sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from reconversion event",
                 sample_sheet_has_changed=True,
             )
         except Exception as e:
