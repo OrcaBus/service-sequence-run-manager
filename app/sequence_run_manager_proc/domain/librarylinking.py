@@ -1,8 +1,8 @@
 import logging
 from dataclasses import dataclass
-
+from datetime import datetime
 from sequence_run_manager_proc.domain.events.srllc import SequenceRunLibraryLinkingChange, AWSEvent
-
+from django.utils import timezone
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -12,7 +12,7 @@ class LibraryLinkingDomain:
     instrument_run_id: str
     sequence_run_id: str
     linked_libraries: list[str]
-    timestamp: str  # ISO format timestamp string
+    timestamp: datetime = timezone.now()
 
     # flag to indicate if library linking changed
     library_linking_has_changed: bool = False

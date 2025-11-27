@@ -129,9 +129,9 @@ def check_sequence_run_libraries_linking_from_bssh_event(payload: dict, force_ch
 
         # Get timestamp from sample sheet if available, otherwise use current time
         if sample_sheet and sample_sheet.association_timestamp:
-            timestamp = sample_sheet.association_timestamp.isoformat()
+            timestamp = sample_sheet.association_timestamp
         else:
-            timestamp = timezone.now().isoformat()
+            timestamp = timezone.now()
 
         return LibraryLinkingDomain(
             instrument_run_id=sequence_run.instrument_run_id,

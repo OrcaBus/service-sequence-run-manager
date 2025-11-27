@@ -15,7 +15,8 @@
           "type": "string"
         },
         "timeStamp": {
-          "type": "string"
+          "type": "string",
+          "format": "date-time"
         },
         "linkedLibraries": {
           "type": "array",

@@ -1,10 +1,9 @@
 import os
 import logging
-import json
-from datetime import datetime
+
 from libumccr.aws import libeb
-from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange
-from sequence_run_manager_proc.domain.events.srllc import SequenceRunLibraryLinkingChange
+from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
+from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -57,10 +56,10 @@ def emit_srm_api_event(event):
             ],
         }
     }
+
     """
 
     # construct event
-    source = "orcabus.sequencerunmanager"
     supported_event_types = ["SequenceRunSampleSheetChange", "SequenceRunLibraryLinkingChange"]
     event_bus_name = os.environ.get("EVENT_BUS_NAME", None)
 
@@ -73,44 +72,45 @@ def emit_srm_api_event(event):
         logger.error(f"Unsupported event type: {event_type}")
         return
 
-    detail_type = event_type
-    detail = None
+
+    event_entry = None
     match event_type:
         case "SequenceRunSampleSheetChange":
-            detail = SequenceRunSampleSheetChange({
-                "instrumentRunId": event["instrumentRunId"],
-                "sequenceRunId": event["sequenceRunId"],
-                "timeStamp": datetime.now(),
-                "sampleSheetName": event["sampleSheetName"],
-                "samplesheetBase64gz": event["samplesheetBase64gz"],
-                "comment": {
-                    "comment": event["comment"]["comment"],
-                    "created_by": event["comment"]["created_by"],
-                    "created_at": event["comment"]["created_at"]
-                }
-            })
+            sample_sheet_domain = SampleSheetDomain(
+                instrument_run_id=event["instrumentRunId"],
+                sequence_run_id=event["sequenceRunId"],
+                sample_sheet=event["sampleSheet"],
+                samplesheet_base64_gz=event["samplesheetBase64gz"],
+                comment=event["comment"],
+            )
+            event_entry = sample_sheet_domain.to_put_events_request_entry(
+                event_bus_name=event_bus_name,
+            )
 
         case "SequenceRunLibraryLinkingChange":
-            detail = SequenceRunLibraryLinkingChange({
-                "instrumentRunId": event["instrumentRunId"],
-                "sequenceRunId": event["sequenceRunId"],
-                "timeStamp": datetime.now(),
-                "linkedLibraries": event["linkedLibraries"],
-            })
+            library_linking_domain = LibraryLinkingDomain(
+                instrument_run_id=event["instrumentRunId"],
+                sequence_run_id=event["sequenceRunId"],
+                linked_libraries=event["linkedLibraries"],
+                timestamp=event["timestamp"],
+            )
+            event_entry = library_linking_domain.to_put_events_request_entry(
+                event_bus_name=event_bus_name,
+            )
 
         case _:
             logger.error(f"Unsupported event type: {event['eventType']}")
             return
 
     # emit event
-    response = libeb.emit_event({
-        "Source": source,
-        "DetailType": detail_type,
-        "Detail": json.dumps(detail),
-        "EventBusName": event_bus_name,
-    })
-
-    logger.info(f"Sent a {event_type} event to event bus {event_bus_name}:")
-    logger.info(detail)
-    logger.info(f"{__name__} done.")
-    return response
+    if event_entry is not None:
+        try:
+            response = libeb.emit_event(event_entry)
+            logger.info(f"Sent a {event_type} event to event bus {event_bus_name}: {event_entry}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to emit event: {e}")
+            return
+    else:
+        logger.error(f"Failed to construct event entry for {event_type}")
+        return

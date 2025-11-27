@@ -1,6 +1,7 @@
 import base64
 import gzip
 import ulid
+from typing import Optional
 from django.utils import timezone
 import logging
 from rest_framework import status
@@ -123,7 +124,7 @@ class SequenceRunActionViewSet(ViewSet):
 
         # step 4: construct event bridge detail and emit event to event bridge
         samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content)).decode('utf-8')
-        samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64_gz, comment, created_by)
+        samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, samplesheet_base64_gz, sample_sheet, comment_obj)
 
         try:
             emit_srm_api_event(samplesheet_change_eb_payload)
@@ -172,22 +173,17 @@ class SequenceRunActionViewSet(ViewSet):
         return Response({"detail": "Samplesheet added successfully"}, status=status.HTTP_200_OK)
 
 
-def construct_samplesheet_change_eb_payload(sequence_run: Sequence, samplesheet_base64_gz: str, comment: str, created_by: str) -> dict:
+def construct_samplesheet_change_eb_payload(sequence_run: Sequence, samplesheet_base64_gz: str, sample_sheet: SampleSheet, comment: Optional[Comment]) -> dict:
     """
-    Construct event bridge detail for samplesheet change based on the sequence run and samplesheet base64
+    Construct event bridge detail for samplesheet change based on the sequence run, sample sheet and comment
     """
     return {
         "eventType": "SequenceRunSampleSheetChange",
         "instrumentRunId": sequence_run.instrument_run_id,
         "sequenceRunId": sequence_run.sequence_run_id,
-        "timeStamp": timezone.now(),
-        "sampleSheetName": sequence_run.sample_sheet_name,
+        "sampleSheet": sample_sheet,
         "samplesheetBase64gz": samplesheet_base64_gz,
-        "comment":{
-            "comment": comment,
-            "created_by": created_by,
-            "created_at": timezone.now()
-        }
+        "comment":comment
     }
 
 
