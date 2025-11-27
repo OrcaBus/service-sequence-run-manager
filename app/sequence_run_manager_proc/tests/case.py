@@ -58,6 +58,7 @@ class SequenceRunProcUnitTestCase(TestCase):
         os.environ["EVENT_BUS_NAME"] = "default"
         os.environ["BASESPACE_ACCESS_TOKEN_SECRET_ID"] = "test"
         os.environ["AWS_DEFAULT_REGION"] = "ap-southeast-2"
+        os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"] = "https://test.sequence.prod.umccr.org"
 
         # Mock the libsm.get_secret function
         when(libsm).get_secret("test").thenReturn("mock-token")
@@ -99,6 +100,8 @@ class SequenceRunProcUnitTestCase(TestCase):
             del os.environ["AWS_SECRET_ACCESS_KEY"]
         if "AWS_SESSION_TOKEN" in os.environ:
             del os.environ["AWS_SESSION_TOKEN"]
+        if "SEQUENCE_RUN_MANAGER_BASE_API_URL" in os.environ:
+            del os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
 
         unstub()
 

@@ -7,7 +7,7 @@ import hashlib
 
 from sequence_run_manager.models import SampleSheet, Comment
 from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent
-from sequence_run_manager.urls.base import api_base
+from sequence_run_manager.settings.base import API_VERSION
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -80,6 +80,7 @@ class SampleSheetDomain:
     def to_event(self) -> Optional[SequenceRunSampleSheetChange]:
         sequenceRunManagerBaseApiUrl = os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
         sequence_id = self.sample_sheet.sequence.orcabus_id
+        api_base = f"api/{API_VERSION}/"
         api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sequence_run/{sequence_id}/sample_sheet/"
         checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content)
         return SequenceRunSampleSheetChange(
