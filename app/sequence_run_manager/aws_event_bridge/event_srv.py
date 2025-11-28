@@ -1,6 +1,6 @@
 import os
 import logging
-
+from django.utils import timezone
 from libumccr.aws import libeb
 from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
 from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
@@ -91,7 +91,7 @@ def emit_srm_api_event(event):
                 instrument_run_id=event["instrumentRunId"],
                 sequence_run_id=event["sequenceRunId"],
                 linked_libraries=event["linkedLibraries"],
-                timestamp=event["timestamp"],
+                timestamp=event["timeStamp"] if "timeStamp" in event else timezone.now(),
             )
             event_entry = library_linking_domain.to_put_events_request_entry(
                 event_bus_name=event_bus_name,
