@@ -112,6 +112,7 @@ class SequenceRunActionViewSet(ViewSet):
             sequence=sequence_run,
             sample_sheet_name=samplesheet_name,
             sample_sheet_content=samplesheet_content_json,
+            sample_sheet_content_original=samplesheet_content_str,  # Store original CSV as UTF-8 string
         )
 
         comment_obj = Comment.objects.create(

@@ -51,6 +51,7 @@ class SequenceViewSetTestCase(TestCase):
             sequence=sequence,
             sample_sheet_name="SampleSheet.csv",
             sample_sheet_content=sample_sheet_content,
+            sample_sheet_content_original=samplesheet,  # Store original CSV content
         )
         Comment.objects.create(
             target_id=sequence.orcabus_id,
@@ -227,7 +228,7 @@ class SequenceViewSetTestCase(TestCase):
 
         # POST request with file upload using DRF's APIClient
         # format='multipart' is required for file uploads with APIClient
-        response = self.client.post(
+        add_samplesheet_response = self.client.post(
             f"{self.sequence_run_endpoint}/action/add_samplesheet/",
             data={
                 "instrument_run_id": "190101_A01052_0001_BH5LY7ACGT",
@@ -237,5 +238,18 @@ class SequenceViewSetTestCase(TestCase):
             },
             format='multipart'
         )
-        self.assertEqual(response.status_code, 200, f"Ok status response is expected, got {response.status_code}: {response.data}")
-        self.assertEqual(response.data["detail"], "Samplesheet added successfully", "Detail is expected")
+
+        self.assertEqual(add_samplesheet_response.status_code, 200, f"Ok status response is expected, got {add_samplesheet_response.status_code}: {add_samplesheet_response.data}")
+        self.assertEqual(add_samplesheet_response.data["detail"], "Samplesheet added successfully", "Detail is expected")
+
+        # Get the created sequence_run (it's created by the add_samplesheet action)
+        sequence_run = Sequence.objects.filter(
+            instrument_run_id="190101_A01052_0001_BH5LY7ACGT"
+        ).exclude(sequence_run_id="r.AAAAAA").first()
+        self.assertIsNotNone(sequence_run, "Sequence run should be created by add_samplesheet action")
+
+        # test get samplesheet
+        get_samplesheet_response = self.client.get(f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/")
+        self.assertEqual(get_samplesheet_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}")
+        self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected")
+        self.assertEqual(get_samplesheet_response.data["sample_sheet_content_original"], samplesheet_content.decode('utf-8'), "Sample sheet content is expected")

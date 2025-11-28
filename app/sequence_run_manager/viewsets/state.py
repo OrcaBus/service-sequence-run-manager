@@ -40,7 +40,6 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         latest_status = sequence.status
         request_status = request.data.get('status', '').upper()
 
-        print(f"latest_status: {latest_status}, request_status: {request_status}")
         # check if the state status is valid
         if not self.check_state_status(latest_status, request_status):
             return Response({"detail": "Invalid state request. Can't add state '{}' to '{}'".format(request_status, latest_status)},

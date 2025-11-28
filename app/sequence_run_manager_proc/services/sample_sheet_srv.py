@@ -84,13 +84,16 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
 
 
     content_base64_gz = event_detail["samplesheetBase64gz"]
-    content_dict = parse_samplesheet(gzip.decompress(base64.b64decode(content_base64_gz)).decode('utf-8'))
+    # Decode from base64+gzip to get original CSV string
+    original_csv_content = gzip.decompress(base64.b64decode(content_base64_gz)).decode('utf-8')
+    content_dict = parse_samplesheet(original_csv_content)
 
     # step 2: create a sample sheet for the sequence run
     sample_sheet = SampleSheet.objects.create(
         sequence=sequence_run,
         sample_sheet_name=samplesheet_name,
         sample_sheet_content=content_dict,
+        sample_sheet_content_original=original_csv_content,  # Store original CSV as UTF-8 string
     )
 
     # comment object needed for sample sheet, refer: https://github.com/umccr/orcabus/issues/947
@@ -162,6 +165,7 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
         if sample_sheet_obj.sample_sheet_content != content_dict:
             logger.info(f"Sample sheet {sample_sheet_name} content is different for sequence {sequence_run.sequence_run_id} from bssh event")
             sample_sheet_obj.sample_sheet_content = content_dict
+            sample_sheet_obj.sample_sheet_content_original = sample_sheet_content  # Update original CSV as UTF-8 string
             sample_sheet_obj.save()
             logger.info(f"Updated sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event")
             return SampleSheetDomain(
@@ -180,6 +184,7 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sequence=sequence_run,
                 sample_sheet_name=sample_sheet_name,
                 sample_sheet_content=content_dict,
+                sample_sheet_content_original=sample_sheet_content,  # Store original CSV as UTF-8 string
             )
             sample_sheet_obj.save()
             logger.info(f"Successfully created sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from reconversion event")
@@ -245,6 +250,7 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Opt
                 sequence=sequence,
                 sample_sheet_name=sample_sheet_content['name'],
                 sample_sheet_content=content_dict,
+                sample_sheet_content_original=sample_sheet_content['content'],  # Store original CSV as UTF-8 string
             )
             sample_sheet_objs_to_create.append(sample_sheet_obj)
 

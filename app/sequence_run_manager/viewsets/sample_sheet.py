@@ -56,11 +56,18 @@ class SampleSheetViewSet(ViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         try:
-            sample_sheet = SampleSheet.objects.get(
-                sequence=sequence_run,
-                association_status='active',
-                sample_sheet_name=sequence_run.sample_sheet_name
+            sample_sheet = (
+                SampleSheet.objects
+                .filter(
+                    sequence=sequence_run,
+                    association_status='active',
+                    sample_sheet_name=sequence_run.sample_sheet_name
+                )
+                .order_by('-association_timestamp')
+                .first()
             )
+            if not sample_sheet:
+                raise SampleSheet.DoesNotExist()
         except SampleSheet.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 

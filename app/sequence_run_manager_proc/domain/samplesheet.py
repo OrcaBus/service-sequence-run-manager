@@ -31,12 +31,12 @@ class SampleSheetDomain:
     def event_type(self) -> str:
         return SequenceRunSampleSheetChange.__name__
 
-    def _generate_sample_sheet_checksum(self, sample_sheet_content: dict) -> str:
+    def _generate_sample_sheet_checksum(self, sample_sheet_content_original: str) -> str:
         """
         Generate a SHA256 checksum from sample sheet content (JSON format).
 
         Args:
-            sample_sheet_content: Dictionary containing the sample sheet content (JSON format)
+            sample_sheet_content_original: Original CSV content of the sample sheet
 
         Returns:
             str: SHA256 checksum as hexadecimal string, or empty string if content is None/empty
@@ -51,7 +51,7 @@ class SampleSheetDomain:
             sample_sheet_data = response.json()
 
             # Generate checksum from fetched content
-            calculated_checksum = generate_sample_sheet_checksum(sample_sheet_data["sample_sheet_content"])
+            calculated_checksum = hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
 
             # Verify integrity
             if calculated_checksum == checksum_from_event:
@@ -59,20 +59,11 @@ class SampleSheetDomain:
             else:
                 print("WARNING: Sample sheet content checksum mismatch!")
         """
-        if not sample_sheet_content:
+        if not sample_sheet_content_original:
             return ""
-
         try:
-            # Convert to JSON string with sorted keys and no whitespace for consistency
-            # This must match exactly how checksum is generated in to_event()
-            json_str = json.dumps(
-                sample_sheet_content,
-                sort_keys=True,
-                separators=(',', ':'),  # Compact format, no spaces
-                ensure_ascii=False
-            )
-            # Generate SHA256 hash
-            return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+            # Generate SHA256 hash from original CSV content
+            return hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
         except Exception as e:
             logger.warning(f"Failed to generate checksum from sample sheet content: {str(e)}")
             return ""
@@ -82,7 +73,7 @@ class SampleSheetDomain:
         sequence_id = self.sample_sheet.sequence.orcabus_id
         api_base = f"api/{API_VERSION}/"
         api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sequence_run/{sequence_id}/sample_sheet/"
-        checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content)
+        checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content_original)
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
