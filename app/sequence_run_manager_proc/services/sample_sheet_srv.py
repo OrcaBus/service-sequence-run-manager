@@ -135,7 +135,7 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
     try:
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
-        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet from reconversion event")
+        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet from bssh event")
         return None
 
     api_url = payload["apiUrl"]
@@ -164,19 +164,24 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
         sample_sheet_obj = SampleSheet.objects.get(sequence=sequence_run, sample_sheet_name=sample_sheet_name)
         if sample_sheet_obj.sample_sheet_content != content_dict:
             logger.info(f"Sample sheet {sample_sheet_name} content is different for sequence {sequence_run.sequence_run_id} from bssh event")
-            sample_sheet_obj.sample_sheet_content = content_dict
-            sample_sheet_obj.sample_sheet_content_original = sample_sheet_content  # Update original CSV as UTF-8 string
-            sample_sheet_obj.save()
-            logger.info(f"Updated sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event")
+            # create a new sample sheet object
+            sample_sheet_new_obj = SampleSheet(
+                sequence=sequence_run,
+                sample_sheet_name=sample_sheet_name,
+                sample_sheet_content=content_dict,
+                sample_sheet_content_original=sample_sheet_content,  # Update original CSV as UTF-8 string
+            )
+            sample_sheet_new_obj.save()
+            logger.info(f"New sample sheet {sample_sheet_new_obj.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from bssh event")
             return SampleSheetDomain(
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
-                sample_sheet=sample_sheet_obj,
-                description=f"Sample sheet {sample_sheet_name} updated for sequence {sequence_run.sequence_run_id} from bssh event",
+                sample_sheet=sample_sheet_new_obj,
+                description=f"New sample sheet {sample_sheet_new_obj.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from bssh event",
                 sample_sheet_has_changed=True,
             )
         else:
-            logger.info(f"Sample sheet {sample_sheet_name} content is the same for sequence {sequence_run.sequence_run_id} from reconversion event")
+            logger.info(f"Sample sheet {sample_sheet_name} content is the same for sequence {sequence_run.sequence_run_id} from bssh event")
             return None
     else:
         try:
@@ -187,12 +192,12 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sample_sheet_content_original=sample_sheet_content,  # Store original CSV as UTF-8 string
             )
             sample_sheet_obj.save()
-            logger.info(f"Successfully created sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id} from reconversion event")
+            logger.info(f"Successfully created sample sheet {sample_sheet_obj.sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event")
             return SampleSheetDomain(
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
                 sample_sheet=sample_sheet_obj,
-                description=f"Sample sheet {sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from reconversion event",
+                description=f"New sample sheet {sample_sheet_obj.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from bssh event",
                 sample_sheet_has_changed=True,
             )
         except Exception as e:
