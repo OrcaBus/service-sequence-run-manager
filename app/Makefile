@@ -67,14 +67,7 @@ clean:
 # set up aws credentials
 setup-dev-aws-credentials:
 	@echo "Setting up AWS credentials..."
-	@if aws sso get-role-credentials --profile dev --role-name dummy --account-id dummy 2>&1 | grep -q 'role_arn' ; then \
-		echo "AWS SSO session already exists"; \
-		export AWS_PROFILE=dev; \
-	else \
-		echo "No AWS SSO session found. Running AWS SSO login..."; \
-		aws sso login --profile dev; \
-		export AWS_PROFILE=dev; \
-	fi
+	@export AWS_PROFILE=dev
 	@echo "AWS credentials set to profile: $$AWS_PROFILE"
 
 # Check database status
@@ -183,10 +176,15 @@ s3-dump-download: setup-dev-aws-credentials
 		exit 1; \
 	fi; \
 	echo "Latest backup date: $$LATEST_DATE"; \
-	REMOTE_PATH="$(REMOTE_DB_BACKUP_BASE_PATH)$$LATEST_DATE/"; \
-	echo "Downloading db dump from $$REMOTE_PATH..."; \
+	REMOTE_DUMP_FILE="$(REMOTE_DB_BACKUP_BASE_PATH)$$LATEST_DATE/$(DB_NAME).dump"; \
+	echo "Checking if dump file exists: $$REMOTE_DUMP_FILE"; \
+	if ! aws s3 ls "$$REMOTE_DUMP_FILE" > /dev/null 2>&1; then \
+		echo "Error: Dump file $(DB_NAME).dump not found in latest backup ($$LATEST_DATE)"; \
+		exit 1; \
+	fi; \
+	echo "Downloading db dump from $$REMOTE_DUMP_FILE..."; \
 	mkdir -p $(LOCAL_DB_BACKUP_FILE_PATH); \
-	aws s3 cp $$REMOTE_PATH $(LOCAL_DB_BACKUP_FILE_PATH) --recursive
+	aws s3 cp "$$REMOTE_DUMP_FILE" "$(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump"
 
 # Check if local dump exists
 s3-dump-download-if-not-exists:
@@ -292,7 +290,10 @@ psql:
 test: install test-up suite test-down
 
 suite:
-	@python manage.py test
+	@DJANGO_SETTINGS_MODULE=sequence_run_manager.settings.it \
+	DB_HOSTNAME=localhost \
+	DB_PORT=5435 \
+	python manage.py test
 
 # Run tests with coverage
 coverage: install up migrate
