@@ -12,7 +12,7 @@ DB_PASSWORD = orcabus
 DB_HOST = localhost
 
 # Docker container names
-DB_CONTAINER = orcabus_db_sequence_run_manager
+DB_CONTAINER = orcabus_db
 APP_CONTAINER = sequence_run_manager
 
 # Docker compose commands
@@ -21,7 +21,7 @@ DC_TEST = docker compose -f $(COMPOSE_TEST)
 
 # DB backup files
 LOCAL_DB_BACKUP_FILE_PATH = data/
-REMOTE_DB_BACKUP_FILE_PATH = s3://orcabus-test-data-843407916570-ap-southeast-2/pg-dd/sequence_run_manager/
+REMOTE_DB_BACKUP_BASE_PATH = s3://orcabus-pg-dd-843407916570-ap-southeast-2/pg-dd/
 
 # Check if database container exists
 DB_EXISTS := $(shell docker ps -q -f name=$(DB_CONTAINER))
@@ -32,7 +32,11 @@ DB_EXISTS := $(shell docker ps -q -f name=$(DB_CONTAINER))
 # Start all services
 up:
 	@echo "Starting fresh database and application..."
-	@$(DC_LOCAL) up --wait -d
+	@echo "initializing database..."
+	@$(MAKE) db-init
+	@echo "starting application..."
+	@$(DC_LOCAL) up --wait -d $(APP_CONTAINER)
+	@echo "application started"
 
 # Stop and remove only the application container
 down:
@@ -58,7 +62,13 @@ clean:
 	@$(DC_TEST) down -v
 
 # Database operations
-.PHONY: db-status db-remove db-reset  s3-dump-download s3-dump-download-if-not-exists db-load-data s3-load db-restore
+.PHONY: db-status db-remove db-reset db-init db-create get-latest-backup-date s3-dump-download s3-dump-download-if-not-exists db-load-data s3-load db-restore
+
+# set up aws credentials
+setup-dev-aws-credentials:
+	@echo "Setting up AWS credentials..."
+	@export AWS_PROFILE=dev
+	@echo "AWS credentials set to profile: $$AWS_PROFILE"
 
 # Check database status
 db-status:
@@ -75,40 +85,129 @@ db-remove:
 	@echo "Removing database..."
 	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_NAME);"
 
-# Reset database (remove and create)
-db-reset: db-remove
-	@echo "Creating fresh database..."
-	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME) OWNER sequence_run_manager;" || true
+# Create database with init-db.sql logic
+db-create:
+	@echo "Creating database and role..."
+	@docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE ROLE sequence_run_manager WITH LOGIN;" 2>/dev/null || echo "Role sequence_run_manager already exists or created."
+	@docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME) OWNER sequence_run_manager;"
+	@docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE $(DB_NAME) TO sequence_run_manager;"
 
-# Download all sql dumps from s3
-s3-dump-download:
-	@echo "Downloading all SQL dumps from S3..."
-	@mkdir -p $(LOCAL_DB_BACKUP_FILE_PATH)
-	@aws s3 cp $(REMOTE_DB_BACKUP_FILE_PATH) $(LOCAL_DB_BACKUP_FILE_PATH) --recursive
+db-reset: db-remove db-create
+
+# Initialize database: check container, create if needed, check database, restore or create
+db-init:
+	@echo "Initializing database setup..."
+	@CONTAINER_EXISTS=$$(docker ps -a -q -f name=$(DB_CONTAINER)); \
+	if [ -z "$$CONTAINER_EXISTS" ]; then \
+		echo "Container $(DB_CONTAINER) does not exist. Creating container with docker compose..."; \
+		$(DC_LOCAL) up -d $(DB_CONTAINER); \
+		echo "Waiting for database container to be ready..."; \
+		timeout=60; \
+		while [ $$timeout -gt 0 ]; do \
+			if docker exec $(DB_CONTAINER) pg_isready -U $(DB_USER) -d postgres >/dev/null 2>&1; then \
+				echo "Database container is ready."; \
+				break; \
+			fi; \
+			echo "Waiting for database... ($$timeout seconds remaining)"; \
+			sleep 2; \
+			timeout=$$((timeout - 2)); \
+		done; \
+		if [ $$timeout -le 0 ]; then \
+			echo "Error: Database container did not become ready in time"; \
+			exit 1; \
+		fi; \
+		echo "Checking if database was initialized via init-db.sql..."; \
+		sleep 2; \
+		DB_EXISTS=$$(docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(DB_NAME)'" 2>/dev/null | grep -q 1 && echo "yes" || echo "no"); \
+		if [ "$$DB_EXISTS" = "no" ]; then \
+			echo "Database $(DB_NAME) does not exist. Creating database..."; \
+			$(MAKE) db-create; \
+			$(MAKE) s3-load; \
+		else \
+			echo "Database $(DB_NAME) exists. Restoring from latest dump..."; \
+			$(MAKE) s3-load; \
+		fi; \
+	else \
+		echo "Container $(DB_CONTAINER) exists."; \
+		CONTAINER_RUNNING=$$(docker ps -q -f name=$(DB_CONTAINER)); \
+		if [ -z "$$CONTAINER_RUNNING" ]; then \
+			echo "Container is stopped. Starting container..."; \
+			docker start $(DB_CONTAINER); \
+			echo "Waiting for database container to be ready..."; \
+			timeout=60; \
+			while [ $$timeout -gt 0 ]; do \
+				if docker exec $(DB_CONTAINER) pg_isready -U $(DB_USER) -d postgres >/dev/null 2>&1; then \
+					echo "Database container is ready."; \
+					break; \
+				fi; \
+				echo "Waiting for database... ($$timeout seconds remaining)"; \
+				sleep 2; \
+				timeout=$$((timeout - 2)); \
+			done; \
+			if [ $$timeout -le 0 ]; then \
+				echo "Error: Database container did not become ready in time"; \
+				exit 1; \
+			fi; \
+		else \
+			echo "Container is already running."; \
+		fi; \
+		echo "Checking if database $(DB_NAME) exists..."; \
+		DB_EXISTS=$$(docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$(DB_NAME)'" 2>/dev/null | grep -q 1 && echo "yes" || echo "no"); \
+		if [ "$$DB_EXISTS" = "no" ]; then \
+			echo "Database $(DB_NAME) does not exist. Creating database..."; \
+			$(MAKE) db-create; \
+			$(MAKE) s3-load; \
+		else \
+			echo "Database $(DB_NAME) exists. Restoring from latest dump..."; \
+			$(MAKE) s3-load; \
+		fi; \
+	fi
+
+# Get latest backup date from S3
+get-latest-backup-date: setup-dev-aws-credentials
+	@aws s3 ls $(REMOTE_DB_BACKUP_BASE_PATH) | grep -E 'PRE [0-9]{8}/' | sed 's/.*PRE \([0-9]\{8\}\)\/.*/\1/' | sort -r | head -1
+
+# Download latest db dump from s3
+s3-dump-download: setup-dev-aws-credentials
+	@echo "Finding latest backup date..."
+	@LATEST_DATE=$$(aws s3 ls $(REMOTE_DB_BACKUP_BASE_PATH) | grep -E 'PRE [0-9]{8}/' | sed 's/.*PRE \([0-9]\{8\}\)\/.*/\1/' | sort -r | head -1); \
+	if [ -z "$$LATEST_DATE" ]; then \
+		echo "Error: No backup found in S3"; \
+		exit 1; \
+	fi; \
+	echo "Latest backup date: $$LATEST_DATE"; \
+	REMOTE_DUMP_FILE="$(REMOTE_DB_BACKUP_BASE_PATH)$$LATEST_DATE/$(DB_NAME).dump"; \
+	echo "Checking if dump file exists: $$REMOTE_DUMP_FILE"; \
+	if ! aws s3 ls "$$REMOTE_DUMP_FILE" > /dev/null 2>&1; then \
+		echo "Error: Dump file $(DB_NAME).dump not found in latest backup ($$LATEST_DATE)"; \
+		exit 1; \
+	fi; \
+	echo "Downloading db dump from $$REMOTE_DUMP_FILE..."; \
+	mkdir -p $(LOCAL_DB_BACKUP_FILE_PATH); \
+	aws s3 cp "$$REMOTE_DUMP_FILE" "$(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump"
 
 # Check if local dump exists
 s3-dump-download-if-not-exists:
-	@if [ ! -d "$(LOCAL_DB_BACKUP_FILE_PATH)" ] || [ -z "$$(ls -A $(LOCAL_DB_BACKUP_FILE_PATH))" ]; then \
+	@if [ ! -f "$(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump" ]; then \
 		$(MAKE) s3-dump-download; \
 	else \
-		echo "Local SQL dumps already exist, skipping download..."; \
+		echo "Local db dump already exists, skipping download..."; \
 	fi
 
-# Load data into database from local (be careful, this will overwrite existing data)
+# Load data into database from local dump file (be careful, this will overwrite existing data)
 db-load-data:
-	@echo "Loading data into database..."
-
-	@echo "Loading sequence data first into database..."
-	@gunzip -c $(LOCAL_DB_BACKUP_FILE_PATH)sequence_run_manager_sequence.csv.gz | docker exec -i $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\COPY sequence_run_manager_sequence FROM STDIN WITH CSV HEADER;" >/dev/null;
-
-	@echo "Loading remaining data into database..."
-	@for file in $(LOCAL_DB_BACKUP_FILE_PATH)*.csv.gz; do \
-		if [ "$$file" != "$(LOCAL_DB_BACKUP_FILE_PATH)sequence_run_manager_sequence.csv.gz" ]; then \
-			table_name=$$(basename $$file .csv.gz); \
-			echo "Loading $$table_name..."; \
-			gunzip -c $$file | docker exec -i $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\COPY $$table_name FROM STDIN WITH CSV HEADER;" >/dev/null; \
-		fi \
-	done
+	@echo "Loading data into database from dump file..."
+	@if [ ! -f "$(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump" ]; then \
+		echo "Error: Dump file not found at $(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump"; \
+		exit 1; \
+	fi
+	@echo "Copying dump file into container..."
+	@docker cp $(LOCAL_DB_BACKUP_FILE_PATH)$(DB_NAME).dump $(DB_CONTAINER):/tmp/$(DB_NAME).dump
+	@echo "Restoring database from dump file..."
+	@docker exec -e PGPASSWORD=$(DB_PASSWORD) $(DB_CONTAINER) \
+		pg_restore -U $(DB_USER) -d $(DB_NAME) --clean --if-exists --no-owner --no-acl /tmp/$(DB_NAME).dump
+	@echo "Cleaning up temporary dump file from container..."
+	@docker exec $(DB_CONTAINER) rm -f /tmp/$(DB_NAME).dump
 
 # Load data into database from s3
 s3-load: s3-dump-download-if-not-exists db-load-data
@@ -191,7 +290,10 @@ psql:
 test: install test-up suite test-down
 
 suite:
-	@python manage.py test
+	@DJANGO_SETTINGS_MODULE=sequence_run_manager.settings.it \
+	DB_HOSTNAME=localhost \
+	DB_PORT=5435 \
+	python manage.py test
 
 # Run tests with coverage
 coverage: install up migrate
@@ -220,19 +322,22 @@ ps:
 help:
 	@echo "Available commands:"
 	@echo "\nDevelopment Commands:"
-	@echo "  make up          - Start all services and load data from S3"
+	@echo "  make up          - Start all services"
 	@echo "  make down        - Stop and remove all containers"
 	@echo "  make stop        - Stop all services but keep containers"
 	@echo "  make clean       - Clean up all containers and volumes"
 	@echo "\nDatabase Commands:"
+	@echo "  make db-init     - Initialize database: check/create container, check/create database, restore from latest dump"
 	@echo "  make db-status   - Check database status"
+	@echo "  make db-create   - Create database and role (uses init-db.sql logic)"
 	@echo "  make db-remove   - Remove database"
 	@echo "  make db-reset    - Reset database (remove and create)"
-	@echo "  make db-backup   - Create database backup"
-	@echo "  make db-restore  - Restore database from backup"
-	@echo "  make db-load-data - Load data into database from local dump"
+	@echo "  make setup-dev-aws-credentials - Setup AWS credentials"
+	@echo "  make get-latest-backup-date - Get latest backup date from S3"
+	@echo "  make s3-dump-download - Download latest db dump from S3"
+	@echo "  make s3-dump-download-if-not-exists - Download latest db dump from S3 if not exists"
+	@echo "  make db-load-data - Load data into database from local dump file"
 	@echo "  make s3-load     - Download and load data from S3"
-	@echo "  make db-restore  - Restore database from backup (requires LOCAL_DB_BACKUP_FILE)"
 	@echo "\nDjango Commands:"
 	@echo "  make migrate     - Apply database migrations"
 	@echo "  make load        - Load mock data"
