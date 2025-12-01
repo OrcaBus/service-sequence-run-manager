@@ -4,14 +4,14 @@ services:
     # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraPostgreSQL.Updates.LTS.html
     # See container image doc https://gallery.ecr.aws/docker/library/postgres for more settings
     image: public.ecr.aws/docker/library/postgres:16
-    container_name: orcabus_db_sequence_run_manager
+    container_name: orcabus_db
     restart: always
     environment:
       - POSTGRES_DB=sequence_run_manager
       - POSTGRES_USER=orcabus
       - POSTGRES_PASSWORD=orcabus
     ports:
-      - '5435:5432'
+      - '5432:5432'
     volumes:
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
@@ -22,9 +22,9 @@ services:
       start_period: 90s
 
   # PORT 8300 ~ sequence-run-manager
-  sequence-run-manager:
+  sequence_run_manager:
     environment:
-      - DB_HOSTNAME=orcabus_db_sequence_run_manager
+      - DB_HOSTNAME=orcabus_db
       - DB_PORT=5432
       - PYTHONUNBUFFERED=1
     ports:
