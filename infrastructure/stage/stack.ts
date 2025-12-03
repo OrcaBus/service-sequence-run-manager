@@ -264,8 +264,7 @@ export class SequenceRunManagerStack extends Stack {
           // Note: sampleSheetName is not always present for
           // See https://github.com/OrcaBus/service-sequence-run-manager/issues/28 for context
           // sampleSheetName: [{ exists: true }],
-
-          icaProjectId: [{ exists: true }],
+          // icaProjectId: [{ exists: true }],
 
           // NOTE: instrumentRunId, name, flowcellBarcode are not always present in early stage of the run
           // instrumentRunId: [{ exists: true }],
