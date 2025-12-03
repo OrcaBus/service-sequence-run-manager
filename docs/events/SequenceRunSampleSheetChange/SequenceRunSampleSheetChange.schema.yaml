@@ -39,6 +39,7 @@ definitions:
       - sampleSheetName
       - apiUrl
       - checksum
+      - checksumType
     properties:
       instrumentRunId:
         type: string
@@ -52,6 +53,8 @@ definitions:
       apiUrl:
         type: string
       checksum:
+        type: string
+      checksumType:
         type: string
       description:
         type:

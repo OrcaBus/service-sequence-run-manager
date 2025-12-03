@@ -12,7 +12,8 @@
         "timeStamp",
         "sampleSheetName",
         "apiUrl",
-        "checksum"
+        "checksum",
+        "checksumType"
       ],
       "properties": {
         "instrumentRunId": {
@@ -32,6 +33,9 @@
           "type": "string"
         },
         "checksum": {
+          "type": "string"
+        },
+        "checksumType": {
           "type": "string"
         },
         "description": {

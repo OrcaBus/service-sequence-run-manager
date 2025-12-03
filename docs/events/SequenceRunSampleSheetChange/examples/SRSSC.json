@@ -12,8 +12,9 @@
     "sequenceRunId": "r.1234567890abcdefghijklmn",
     "timeStamp": "2024-04-27T03:45:02.113245Z",
     "sampleSheetName": "sampleSheet_v2.csv",
-    "apiUrl": "https://sequence.prod.umccr.org/api/v1/sequence_run/seq.01234567890ABCDEF/sample_sheet/",
+    "apiUrl": "https://sequence.prod.umccr.org/api/v1/sample_sheet/ss.01234567890ABCDEF/",
     "checksum": "1234567890abcdefghijklmnopqrstuvwxyz1234567890abcdefghijklmnopqrstuvwxyz",
+    "checksumType": "sha256",
     "description": "description"
   }
 }
