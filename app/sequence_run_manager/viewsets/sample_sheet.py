@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class SampleSheetViewSet(ViewSet):
     """
-    ViewSet for retrieving sample sheet by its orcabus_id or checksum
+    ViewSet for retrieving sample sheets nested under sequence_run
     """
     pagination_class = None
     lookup_value_regex = "[^/]+" # to allow id prefix
@@ -37,48 +37,28 @@ class SampleSheetViewSet(ViewSet):
             logger.warning(f"Failed to calculate checksum from sample sheet content: {str(e)}")
             return ""
 
-    def get_object(self):
-        """
-        Override to use orcabus_id from URL kwargs (pk from router)
-        """
-        orcabus_id = self.kwargs.get('pk') or self.kwargs.get('orcabus_id')
-        return get_object_or_404(SampleSheet, orcabus_id=orcabus_id)
-
     @extend_schema(
         responses={
-            200: SampleSheetSerializer,
+            200: OpenApiResponse(description="Checksum matches."),
+            400: OpenApiResponse(description="Checksum mismatch or missing checksum parameter."),
             404: OpenApiResponse(description="Sample sheet not found.")
-        },
-        operation_id="get_sample_sheet_by_id"
-    )
-    def retrieve(self, request, *args, **kwargs):
-        """
-        Returns a SampleSheet by its orcabus_id.
-        GET /api/v1/sample_sheet/{orcabus_id}
-        """
-        sample_sheet = self.get_object()
-        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
-
-    @extend_schema(
-        responses={
-            200: SampleSheetSerializer,
-            404: OpenApiResponse(description="Sample sheet not found or checksum does not match.")
         },
         operation_id="verify_sample_sheet_checksum",
         description="Verifies that a sample sheet's checksum matches the provided checksum. The checksum is calculated from the sample_sheet_content_original field using SHA256. This allows clients to verify sample sheet integrity."
     )
-    @action(detail=True, methods=["get"], url_name="checksum", url_path="checksum/(?P<checksum>[^/]+)")
+    @action(detail=True, methods=["get"], url_name="checksum", url_path="sample_sheet/(?P<ss_orcabus_id>[^/]+)/checksum/(?P<checksum>[^/]+)")
     def checksum(self, request, *args, **kwargs):
         """
         Verifies that a sample sheet's checksum matches the provided checksum.
-        GET /api/v1/sample_sheet/{orcabus_id}/checksum/{checksum}
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheet/{ss_orcabus_id}/checksum/{checksum}
 
         The checksum is calculated from the sample_sheet_content_original field using SHA256.
         This allows clients to verify sample sheet integrity by comparing the provided checksum
         with the calculated checksum of the sample sheet with the given orcabus_id.
         """
         # Get the sample sheet by orcabus_id
-        sample_sheet = self.get_object()
+        ss_orcabus_id = kwargs.get('ss_orcabus_id')
+        sample_sheet = get_object_or_404(SampleSheet, orcabus_id=ss_orcabus_id)
 
         # Get the checksum from URL parameters
         provided_checksum = kwargs.get('checksum')
@@ -101,51 +81,43 @@ class SampleSheetViewSet(ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Checksums match, return the sample sheet
+        # Checksums match, return success response
         return Response({"status": "match", "message": "Checksum matches."}, status=status.HTTP_200_OK)
-
-
-class SampleSheetBySequenceRunViewSet(ViewSet):
-    """
-    ViewSet for sample sheet actions on sequence runs
-    """
-    queryset = Sequence.objects.all()
-    pagination_class = None
-    lookup_value_regex = "[^/]+" # to allow id prefix
-
-    @extend_schema(
-        responses={
-            200: SampleSheetSerializer(many=True),
-            404: OpenApiResponse(description="No sample sheets found for this sequence.")
-        },
-        operation_id="get_sequence_sample_sheets"
-    )
-    @action(detail=True, methods=["get"], url_name="sample_sheets", url_path="sample_sheets")
-    def sample_sheets(self, request, *args, **kwargs):
-        """
-        Returns all active SampleSheet records for a sequence.
-        """
-        # pk is the orcabus_id since it's the primary key
-        sequence = get_object_or_404(Sequence, orcabus_id=kwargs.get('pk'))
-        sample_sheets = SampleSheet.objects.filter(sequence=sequence, association_status='active')
-        if not sample_sheets.exists():
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(SampleSheetSerializer(sample_sheets, many=True).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         responses={
             200: SampleSheetSerializer,
-            404: OpenApiResponse(description="No active sample sheet found for this sequence.")
+            404: OpenApiResponse(description="No sample sheet found for this ss_orcabus_id.")
+        },
+        operation_id="get_sequence_sample_sheet_by_ss_orcabus_id"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheet_by_ss_orcabus_id", url_path="sample_sheet/(?P<ss_orcabus_id>[^/]+)")
+    def sample_sheet_by_ss_orcabus_id(self, request, *args, **kwargs):
+        """
+        Returns a single SampleSheet record for a ss_orcabus_id.
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheet/{ss_orcabus_id}/
+        """
+        ss_orcabus_id = kwargs.get('ss_orcabus_id')
+        sample_sheet = get_object_or_404(SampleSheet, orcabus_id=ss_orcabus_id)
+
+        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={
+            200: SampleSheetSerializer,
+            404: OpenApiResponse(description="No sample sheet found for this sequence matching the sample_sheet_name.")
         },
         operation_id="get_sequence_sample_sheet"
     )
     @action(detail=True, methods=["get"], url_name="sample_sheet", url_path="sample_sheet")
     def sample_sheet(self, request, *args, **kwargs):
         """
-        Returns a single active SampleSheet record for a sequence that matches the sequence's sample_sheet_name.
+        Returns a single SampleSheet record for a sequence that matches the sequence's sample_sheet_name.
+        If there are multiple sample sheets with the same name, returns the latest one (by association_timestamp).
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheet/
         """
-        # pk is the orcabus_id since it's the primary key
-        sequence_run = get_object_or_404(Sequence, orcabus_id=kwargs.get('pk'))
+        orcabus_id = kwargs.get('orcabus_id')
+        sequence_run = get_object_or_404(Sequence, orcabus_id=orcabus_id)
         if not sequence_run.sample_sheet_name:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -154,7 +126,6 @@ class SampleSheetBySequenceRunViewSet(ViewSet):
                 SampleSheet.objects
                 .filter(
                     sequence=sequence_run,
-                    association_status='active',
                     sample_sheet_name=sequence_run.sample_sheet_name
                 )
                 .order_by('-association_timestamp')
@@ -166,3 +137,22 @@ class SampleSheetBySequenceRunViewSet(ViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={
+            200: SampleSheetSerializer(many=True),
+            404: OpenApiResponse(description="No sample sheets found for this sequence.")
+        },
+        operation_id="get_sequence_sample_sheets"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheets", url_path="sample_sheets")
+    def sample_sheets(self, request, *args, **kwargs):
+        """
+        Returns all SampleSheet records for a sequence.
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheets/
+        """
+        sequence = get_object_or_404(Sequence, orcabus_id=kwargs.get('orcabus_id'))
+        sample_sheets = SampleSheet.objects.filter(sequence=sequence, association_status='active')
+        if not sample_sheets.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(SampleSheetSerializer(sample_sheets, many=True).data, status=status.HTTP_200_OK)

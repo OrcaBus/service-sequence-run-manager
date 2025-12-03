@@ -24,7 +24,6 @@ logger.setLevel(logging.INFO)
 class SequenceViewSetTestCase(TestCase):
     sequence_run_endpoint = f"/{api_base}sequence_run"
     sequence_endpoint = f"/{api_base}sequence"
-    sample_sheet_endpoint = f"/{api_base}sample_sheet"
 
     def setUp(self):
         # Use DRF's APIClient for better compatibility with DRF viewsets
@@ -256,17 +255,15 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected")
         self.assertEqual(get_samplesheet_response.data["sample_sheet_content_original"], samplesheet_content.decode('utf-8'), "Sample sheet content is expected")
 
-
-
         # test get samplesheet by ss orcabus_id
         ss_orcabus_id = get_samplesheet_response.data["orcabus_id"]
-        get_samplesheet_response = self.client.get(f"{self.sample_sheet_endpoint}/{ss_orcabus_id}/")
+        get_samplesheet_response = self.client.get(f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/{ss_orcabus_id}/")
         self.assertEqual(get_samplesheet_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}")
         self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected"),
 
         sample_sheet_content_original = get_samplesheet_response.data["sample_sheet_content_original"]
         ss_checksum = hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
-        get_samplesheet_checksum_response = self.client.get(f"{self.sample_sheet_endpoint}/{ss_orcabus_id}/checksum/{ss_checksum}/")
+        get_samplesheet_checksum_response = self.client.get(f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/{ss_orcabus_id}/checksum/{ss_checksum}/")
         self.assertEqual(get_samplesheet_checksum_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_checksum_response.status_code}: {get_samplesheet_checksum_response.data}")
         self.assertEqual(get_samplesheet_checksum_response.data["status"], "match", "Status is expected")
         self.assertEqual(get_samplesheet_checksum_response.data["message"], "Checksum matches.", "Message is expected")
