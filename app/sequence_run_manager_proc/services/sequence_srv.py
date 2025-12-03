@@ -123,10 +123,14 @@ def enrich_sequence_with_run_details(sequence: Sequence, api_url: str) -> None:
     Fetch and add run details from BSSH API
     Note: currently only experiment name is fetched, more details can be added here
     """
-    bssh_service = BSSHService()
-    run_details = bssh_service.get_run_details(api_url)
-    sequence.experiment_name = run_details.get("ExperimentName")
-    logger.info(f"Enriched Sequence (sequence_run_id={sequence.sequence_run_id}, experiment_name={sequence.experiment_name})")
+    try:
+        bssh_service = BSSHService()
+        run_details = bssh_service.get_run_details(api_url)
+        sequence.experiment_name = run_details.get("ExperimentName")
+        logger.info(f"Enriched Sequence (sequence_run_id={sequence.sequence_run_id}, experiment_name={sequence.experiment_name})")
+    except Exception as e:
+        logger.error(f"Error enriching sequence with run details: {e}.")
+        return
 
 def update_existing_sequence(sequence: Sequence, payload: Dict) -> Sequence:
     """Update an existing sequence record"""
@@ -160,7 +164,7 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
     - "pendinganalysis" state after terminal('complete','failed','aborted', etc) state
 
     sample_sheet_ready to be true if:
-    - sample sheet name and instrument run id are not UNKNOWN_VALUE or None
+    - api url and instrument run id are not UNKNOWN_VALUE or None, sample sheet name is optional
 
     """
 
@@ -168,7 +172,7 @@ def create_sequence_domain(sequence: Sequence, status: SequenceStatus, timing_in
     state_exists = State.objects.filter(sequence=sequence,timestamp=timing_info['start_time'],status=state).exists()
 
     # check instrument upload complete
-    sample_sheet_ready = (sequence.sample_sheet_name is not None and sequence.sample_sheet_name != SequenceConfig.UNKNOWN_VALUE) and (sequence.instrument_run_id is not None and sequence.instrument_run_id != SequenceConfig.UNKNOWN_VALUE)
+    sample_sheet_ready = (sequence.api_url is not None and sequence.api_url != SequenceConfig.UNKNOWN_VALUE) and (sequence.instrument_run_id is not None and sequence.instrument_run_id != SequenceConfig.UNKNOWN_VALUE)
 
     if state_exists:
         return SequenceDomain(

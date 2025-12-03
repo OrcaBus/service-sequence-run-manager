@@ -1,3 +1,4 @@
+from tkinter import N
 from django.db import transaction
 from django.utils import timezone
 import ulid
@@ -12,6 +13,7 @@ from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
 from sequence_run_manager_proc.services.sequence_library_srv import update_sequence_run_libraries_linking
+from sequence_run_manager_proc.services.sequence_srv import SequenceConfig
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
@@ -39,7 +41,7 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
     try:
         sample_sheet, samplesheet_content = create_sequence_sample_sheet(sequence_run, payload)
         if not sample_sheet or not samplesheet_content:
-            logger.error(f"Error creating sample sheet for sequence {payload['id']}.")
+            logger.error(f"Error creating sample sheet or no sample sheet name found for sequence {payload['id']}.")
             return None
         return SampleSheetDomain(
             instrument_run_id=sequence_run.instrument_run_id,
@@ -129,8 +131,12 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
     if sample shett exist ,will check if the content is the same, if different, update the sample sheet content, if not return none, if not exists, create a new sample sheet
     """
     assert payload["id"] is not None, "sequence run id is required"
-    assert payload["apiUrl"] is not None, "api url is required"
-    assert payload["sampleSheetName"] is not None, "sample sheet name is required"
+    if not payload.get("apiUrl", None):
+        logger.warning(f"No API URL provided for sequence {payload['id']}, skipping sample sheet check")
+        return None
+    if not payload.get("sampleSheetName", None):
+        logger.warning(f"No sample sheet name provided for sequence {payload['id']}, skipping sample sheet check")
+        return None
 
     try:
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
@@ -233,8 +239,8 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Opt
 
     # instance and content for sequence sample sheet
     sequence_samplesheet:SampleSheet = None
-    sequence_samplesheet_content: str = None
-    sequence_samplesheet_name: str = sequence.sample_sheet_name
+    sequence_samplesheet_content: Optional[str] = None
+    sequence_samplesheet_name: Optional[str] = sequence.sample_sheet_name
 
     for sample_sheet_content in sample_sheet_contents:
         # Check if the sample sheet already exists
@@ -259,7 +265,7 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Opt
             )
             sample_sheet_objs_to_create.append(sample_sheet_obj)
 
-            if sample_sheet_content['name'] == sequence_samplesheet_name:
+            if sequence_samplesheet_name != None and sequence_samplesheet_name != SequenceConfig.UNKNOWN_VALUE and sample_sheet_content['name'] == sequence_samplesheet_name:
                 sequence_samplesheet = sample_sheet_obj
                 sequence_samplesheet_content = sample_sheet_content['content']
 
