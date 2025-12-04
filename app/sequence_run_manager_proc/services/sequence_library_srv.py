@@ -56,6 +56,14 @@ def update_sequence_run_libraries_linking(sequence_run: Sequence, linked_librari
         logger.error(f"Error creating library associations for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
         return
 
+def get_libraries_from_bssh(api_url: str)->list[str]:
+    """
+    Get libraries from bssh
+    """
+    bssh_srv = BSSHService()
+    run_details = bssh_srv.get_run_details(api_url)
+    return BSSHService.get_libraries_from_run_details(run_details)
+
 def check_sequence_run_libraries_linking_from_bssh_event(payload: dict, force_check: bool = False)->Optional[LibraryLinkingDomain]:
     """
     Check if libraries are linked to the sequence run;
@@ -65,63 +73,73 @@ def check_sequence_run_libraries_linking_from_bssh_event(payload: dict, force_ch
     otherwise, we will skip checking if libraries are already linked
     """
     assert payload["id"] is not None, "sequence run id is required"
-    assert payload["sampleSheetName"] is not None, "sample sheet name is required"
 
     try:
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
         logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence run libraries linking")
-        return
+        return None
 
     # check if there is any library association for this sequence run, if so, skip creation
     if not force_check and LibraryAssociation.objects.filter(sequence=sequence_run).exists():
         logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, skipping creation")
-        return
+        return None
 
     linked_libraries = []
-    # Get the latest sample sheet by association_timestamp
-    sample_sheet = SampleSheet.objects.filter(
-        sequence=sequence_run,
-        sample_sheet_name=payload["sampleSheetName"]
-    ).order_by('-association_timestamp').first()
 
-    if sample_sheet:
-        logger.info(f"Sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from sample sheet")
-        bclconvert_data = sample_sheet.sample_sheet_content.get("bclconvert_data", [])
-        # return empty list if no bclconvert_data
-        if not bclconvert_data:
-            logger.info(f"No libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}")
-        else:
-            # remove repeated value
-            linked_libraries = list(dict.fromkeys(entry["sample_id"] for entry in bclconvert_data))
-            logger.info(f"Libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
-    else:
-        logger.info(f"No sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from bssh")
+    if not payload.get("sampleSheetName", None):
+        logger.info(f"No sample sheet name found for sequence run {sequence_run.sequence_run_id}, fetching libraries from bssh")
         try:
             if not sequence_run.api_url:
                 logger.warning(f"No API URL available for sequence {sequence_run.sequence_run_id}, cannot fetch libraries from BSSH")
-                return
-
-            bssh_srv = BSSHService()
-            run_details = bssh_srv.get_run_details(sequence_run.api_url)
-            linked_libraries = BSSHService.get_libraries_from_run_details(run_details)
-
+                return None
+            linked_libraries = get_libraries_from_bssh(sequence_run.api_url)
         except Exception as e:
             logger.error(f"Error fetching libraries from BSSH API for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
-            return  # Continue execution - don't raise, so the lambda can continue processing
+            return None
+    else:
+        # Get the latest sample sheet by association_timestamp
+        sample_sheet = SampleSheet.objects.filter(
+            sequence=sequence_run,
+            sample_sheet_name=payload["sampleSheetName"]
+        ).order_by('-association_timestamp').first()
 
-    # if libraries are already linked, check if the libraries are the same
-    if LibraryAssociation.objects.filter(sequence=sequence_run).exists() and linked_libraries:
-        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
-        if set(existing_libraries) == set(linked_libraries):
-            logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
-            return
+        if sample_sheet:
+            logger.info(f"Sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from sample sheet")
+            bclconvert_data = sample_sheet.sample_sheet_content.get("bclconvert_data", [])
+            # return empty list if no bclconvert_data
+            if not bclconvert_data:
+                logger.info(f"No libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}")
+            else:
+                # remove repeated value
+                linked_libraries = list(dict.fromkeys(entry["sample_id"] for entry in bclconvert_data))
+                logger.info(f"Libraries found from sample sheet for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
         else:
-            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+            logger.info(f"No sample sheet found for sequence run {sequence_run.sequence_run_id}, fetching libraries from bssh")
+            try:
+                if not sequence_run.api_url:
+                    logger.warning(f"No API URL available for sequence {sequence_run.sequence_run_id}, cannot fetch libraries from BSSH")
+                    return None
+
+                linked_libraries = get_libraries_from_bssh(sequence_run.api_url)
+
+            except Exception as e:
+                logger.error(f"Error fetching libraries from BSSH API for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
+                return None
 
     if not linked_libraries:
         logger.info(f"No libraries found for sequence run {sequence_run.sequence_run_id}, skipping library associations creation")
-        return
+        return None
+
+    # if libraries are already linked, check if the libraries are the same
+    if LibraryAssociation.objects.filter(sequence=sequence_run).exists():
+        existing_libraries = LibraryAssociation.objects.filter(sequence=sequence_run).values_list('library_id', flat=True)
+        if set(existing_libraries) == set(linked_libraries):
+            logger.info(f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}")
+            return None
+        else:
+            LibraryAssociation.objects.filter(sequence=sequence_run).delete()
+            logger.info(f"Library associations deleted for sequence run {sequence_run.sequence_run_id}")
 
     try:
         create_sequence_run_libraries_linking(sequence_run, linked_libraries)
@@ -142,7 +160,7 @@ def check_sequence_run_libraries_linking_from_bssh_event(payload: dict, force_ch
         )
     except Exception as e:
         logger.error(f"Error creating library associations for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
-        return
+        return None
 
 @transaction.atomic
 def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):

@@ -34,9 +34,12 @@ definitions:
     type: object
     required:
       - instrumentRunId
+      - sequenceRunId
       - timeStamp
       - sampleSheetName
-      - samplesheetBase64gz
+      - apiUrl
+      - checksum
+      - checksumType
     properties:
       instrumentRunId:
         type: string
@@ -47,20 +50,13 @@ definitions:
         format: date-time
       sampleSheetName:
         type: string
-      samplesheetBase64gz:
+      apiUrl:
         type: string
-      comment:
-        '$ref': '#/definitions/Comment'
-  Comment:
-    type: object
-    required:
-      - comment
-      - created_by
-    properties:
-      comment:
+      checksum:
         type: string
-      created_by:
+      checksumType:
         type: string
-      created_at:
-        type: string
-        format: date-time
+      description:
+        type:
+          - string
+          - 'null'

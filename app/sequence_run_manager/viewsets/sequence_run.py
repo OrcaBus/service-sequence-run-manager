@@ -9,6 +9,9 @@ from sequence_run_manager.pagination import StandardResultsSetPagination
 from django.db.models import Q, Count, Min, Max
 from sequence_run_manager.models import Sequence, LibraryAssociation
 from sequence_run_manager.serializers.sequence_run import SequenceRunSerializer, SequenceRunListParamSerializer, SequenceRunMinSerializer, SequenceRunGroupByInstrumentRunIdSerializer
+from sequence_run_manager.serializers.sample_sheet import SampleSheetSerializer
+from sequence_run_manager.models.sample_sheet import SampleSheet
+from django.shortcuts import get_object_or_404
 
 
 class SequenceRunViewSet(BaseViewSet):
@@ -16,6 +19,7 @@ class SequenceRunViewSet(BaseViewSet):
     search_fields = Sequence.get_base_fields()
     queryset = Sequence.objects.all()
     lookup_value_regex = "[^/]+" # to allow id prefix
+    lookup_field = 'orcabus_id'
 
     def get_queryset(self):
         """
@@ -138,3 +142,81 @@ class SequenceRunViewSet(BaseViewSet):
                 })
 
         return paginator.get_paginated_response(result)
+
+    @extend_schema(
+        responses={
+            200: SampleSheetSerializer,
+            404: OpenApiResponse(description="No sample sheet found for this sequence matching the sample_sheet_name.")
+        },
+        operation_id="get_sequence_sample_sheet"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheet", url_path="sample_sheet")
+    def sample_sheet(self, request, *args, **kwargs):
+        """
+        Returns a single SampleSheet record for a sequence that matches the sequence's sample_sheet_name.
+        If there are multiple sample sheets with the same name, returns the latest one (by association_timestamp).
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheet/
+        """
+        orcabus_id = kwargs.get('orcabus_id') or kwargs.get('pk')
+        if not orcabus_id:
+            return Response({"detail": "orcabus_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        sequence_run = get_object_or_404(Sequence, orcabus_id=orcabus_id)
+        if not sequence_run.sample_sheet_name:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            sample_sheet = (
+                SampleSheet.objects
+                .filter(
+                    sequence=sequence_run,
+                    sample_sheet_name=sequence_run.sample_sheet_name,
+                    association_status='active'
+                )
+                .order_by('-association_timestamp')
+                .first()
+            )
+            if not sample_sheet:
+                raise SampleSheet.DoesNotExist()
+        except SampleSheet.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={
+            200: SampleSheetSerializer,
+            404: OpenApiResponse(description="No sample sheet found with the given orcabus_id for this sequence.")
+        },
+        operation_id="get_sequence_sample_sheet_by_orcabus_id"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheet_by_orcabus_id", url_path="sample_sheet/(?P<ss_orcabus_id>[^/]+)")
+    def sample_sheet_by_orcabus_id(self, request, *args, **kwargs):
+        """
+        Returns a single SampleSheet record by its orcabus_id for a specific sequence.
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheet/{ss_orcabus_id}/
+        """
+        sequence_run = get_object_or_404(Sequence, orcabus_id=kwargs.get('orcabus_id'))
+        sample_sheet = get_object_or_404(SampleSheet, orcabus_id=kwargs.get('ss_orcabus_id'), sequence=sequence_run)
+        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        responses={
+            200: SampleSheetSerializer(many=True),
+            404: OpenApiResponse(description="No sample sheets found for this sequence.")
+        },
+        operation_id="get_sequence_sample_sheets"
+    )
+    @action(detail=True, methods=["get"], url_name="sample_sheets", url_path="sample_sheets")
+    def sample_sheets(self, request, *args, **kwargs):
+        """
+        Returns all SampleSheet records for a sequence.
+        GET /api/v1/sequence_run/{orcabus_id}/sample_sheets/
+        """
+        orcabus_id = kwargs.get('orcabus_id') or kwargs.get('pk')
+        if not orcabus_id:
+            return Response({"detail": "orcabus_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        sequence = get_object_or_404(Sequence, orcabus_id=orcabus_id)
+        sample_sheets = SampleSheet.objects.filter(sequence=sequence, association_status='active')
+        if not sample_sheets.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        return Response(SampleSheetSerializer(sample_sheets, many=True).data, status=status.HTTP_200_OK)

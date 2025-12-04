@@ -1,10 +1,13 @@
+import os
 import json
 import logging
 from dataclasses import dataclass
 from typing import Optional
+import hashlib
 
 from sequence_run_manager.models import SampleSheet, Comment
-from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent, Comment as CommentEvent
+from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent
+from sequence_run_manager.settings.base import API_VERSION
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -15,8 +18,7 @@ class SampleSheetDomain:
     sample_sheet: SampleSheet
     instrument_run_id: str
     sequence_run_id: str
-    samplesheet_base64_gz: str
-    comment: Optional[Comment] = None
+    description: Optional[str] = None
 
     # flag to indicate if sample sheet changed
     sample_sheet_has_changed: bool = False
@@ -29,21 +31,57 @@ class SampleSheetDomain:
     def event_type(self) -> str:
         return SequenceRunSampleSheetChange.__name__
 
-    def to_event(self) -> SequenceRunSampleSheetChange:
-        comment_event = None
-        if self.comment:
-            comment_event = CommentEvent(
-                comment=self.comment.comment,
-                created_by=self.comment.created_by,
-                created_at=self.comment.created_at,
-            )
+    def _generate_sample_sheet_checksum(self, sample_sheet_content_original: str) -> str:
+        """
+        Generate a SHA256 checksum from sample sheet content (JSON format).
+
+        Args:
+            sample_sheet_content_original: Original CSV content of the sample sheet
+
+        Returns:
+            str: SHA256 checksum as hexadecimal string, or empty string if content is None/empty
+
+        Example usage:
+            # In another service consuming SequenceRunSampleSheetChange events:
+            event_detail = event["detail"]
+            checksum_from_event = event_detail["checksum"]
+
+            # Fetch sample sheet from API
+            response = requests.get(event_detail["apiUrl"])
+            sample_sheet_data = response.json()
+
+            # Generate checksum from fetched content
+            calculated_checksum = hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
+
+            # Verify integrity
+            if calculated_checksum == checksum_from_event:
+                print("Sample sheet content is valid!")
+            else:
+                print("WARNING: Sample sheet content checksum mismatch!")
+        """
+        if not sample_sheet_content_original:
+            return ""
+        try:
+            # Generate SHA256 hash from original CSV content
+            return hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
+        except Exception as e:
+            logger.warning(f"Failed to generate checksum from sample sheet content: {str(e)}")
+            return ""
+
+    def to_event(self) -> Optional[SequenceRunSampleSheetChange]:
+        sequenceRunManagerBaseApiUrl = os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
+        api_base = f"/api/{API_VERSION}/"
+        api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sample_sheet/{self.sample_sheet.orcabus_id}/"
+        checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content_original)
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
             timeStamp=self.sample_sheet.association_timestamp,
             sampleSheetName=self.sample_sheet.sample_sheet_name,
-            samplesheetBase64gz=self.samplesheet_base64_gz,
-            comment=comment_event,
+            apiUrl=api_url,
+            checksum=checksum,
+            checksumType="sha256",
+            description=self.description,
         )
 
     def to_event_with_envelope(self) -> AWSEvent:

@@ -17,6 +17,8 @@ class SampleSheet(OrcaBusBaseModel):
     association_timestamp = models.DateTimeField(auto_now_add=True)
     # JSONB field for sample sheet content
     sample_sheet_content = models.JSONField(null=True, blank=True)
+    # original CSV content of the sample sheet
+    sample_sheet_content_original = models.TextField(null=True, blank=True)
 
     # TODO: add checksums field and filemanager orcabus_id if needed
     # checksums = models.JSONField()
