@@ -70,9 +70,8 @@ class SampleSheetDomain:
 
     def to_event(self) -> Optional[SequenceRunSampleSheetChange]:
         sequenceRunManagerBaseApiUrl = os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
-        sequence_id = self.sample_sheet.sequence.orcabus_id
         api_base = f"/api/{API_VERSION}/"
-        api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sequence_run/{sequence_id}/sample_sheet/{self.sample_sheet.orcabus_id}/"
+        api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sample_sheet/{self.sample_sheet.orcabus_id}/"
         checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content_original)
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
