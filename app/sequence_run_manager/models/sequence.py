@@ -51,7 +51,7 @@ class SequenceStatus(models.TextChoices):
         :return:
         """
         value = str(value).lower()
-        if value in ["uploading", "running", "new"]:
+        if value in ["uploading", "running", "new", "ready"]:
             return cls.STARTED
         elif value in ["complete", "analyzing", "pendinganalysis"]:
             return cls.SUCCEEDED
