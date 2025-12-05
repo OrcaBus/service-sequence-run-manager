@@ -54,6 +54,17 @@ class SequenceRunViewSet(BaseViewSet):
 
         return result_set.distinct()
 
+    @extend_schema(responses={200: SequenceRunSerializer, 404: OpenApiResponse(description="Sequence run not found.")}, operation_id="get_sequence_run_by_orcabus_id")
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Returns a single Sequence record by its orcabus_id.
+        GET /api/v1/sequence_run/{orcabus_id}/
+        """
+        orcabus_id = kwargs.get('orcabus_id') or kwargs.get('pk')
+        if not orcabus_id:
+            return Response({"detail": "orcabus_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        sequence = get_object_or_404(Sequence, orcabus_id=orcabus_id)
+        return Response(SequenceRunSerializer(sequence).data, status=status.HTTP_200_OK)
 
     @extend_schema(parameters=[
         SequenceRunListParamSerializer
