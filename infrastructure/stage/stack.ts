@@ -170,6 +170,7 @@ export class SequenceRunManagerStack extends Stack {
       index: 'api.py',
       handler: 'handler',
       timeout: Duration.minutes(1),
+      memorySize: 1024,
     });
 
     const srmApi = new OrcaBusApiGateway(this, 'ApiGateway', props.apiGatewayCognitoProps);
