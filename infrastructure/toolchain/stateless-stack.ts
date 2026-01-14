@@ -20,6 +20,9 @@ export class StatelessStack extends cdk.Stack {
       },
       pipelineName: 'OrcaBus-StatelessSequnceRunManager',
       cdkSynthCmd: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm cdk synth'],
+      unitAppTestConfig: {
+        command: ['cd app', 'make install', 'make test'],
+      },
     });
   }
 }
