@@ -16,8 +16,8 @@ importers:
         specifier: 2.234.1-alpha.0
         version: 2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)
       '@orcabus/platform-cdk-constructs':
-        specifier: 1.0.1
-        version: 1.0.1(@aws-cdk/aws-lambda-python-alpha@2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4))(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)
+        specifier: 1.0.2
+        version: 1.0.2(@aws-cdk/aws-lambda-python-alpha@2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4))(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)
       aws-cdk-lib:
         specifier: ^2.234.1
         version: 2.234.1(constructs@10.4.4)
@@ -443,8 +443,8 @@ packages:
   '@napi-rs/wasm-runtime@0.2.12':
     resolution: {integrity: sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==}
 
-  '@orcabus/platform-cdk-constructs@1.0.1':
-    resolution: {integrity: sha512-rKPigLNt6AZza5MLhBu4tl41PTY72EoFsO5wnX5AlA/qrETLiILGdIUXuHCYQcnM/7mpjdLCMTR/T42h6be2mg==}
+  '@orcabus/platform-cdk-constructs@1.0.2':
+    resolution: {integrity: sha512-DD8l/5Xf5IajCQ1cji2UmcIceLWqSg3YvTue1m+BKqcxJXVo6X3wqZZHVVNWhGxE1+/zmJPrT7zX4dWklaMrEw==}
     peerDependencies:
       '@aws-cdk/aws-lambda-python-alpha': ^2.213.0-alpha.0
       aws-cdk-lib: ^2.213.0
@@ -2364,7 +2364,7 @@ snapshots:
       '@tybys/wasm-util': 0.10.1
     optional: true
 
-  '@orcabus/platform-cdk-constructs@1.0.1(@aws-cdk/aws-lambda-python-alpha@2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4))(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)':
+  '@orcabus/platform-cdk-constructs@1.0.2(@aws-cdk/aws-lambda-python-alpha@2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4))(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)':
     dependencies:
       '@aws-cdk/aws-lambda-python-alpha': 2.234.1-alpha.0(aws-cdk-lib@2.234.1(constructs@10.4.4))(constructs@10.4.4)
       aws-cdk-lib: 2.234.1(constructs@10.4.4)
