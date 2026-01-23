@@ -370,15 +370,25 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
     # when no match found, we need to create a new sample sheet from the sample sheet uri
 
     # Get the samplesheet uri as a project data object
-    project_data_obj = convert_uri_to_project_data_obj(
-        sample_sheet_uri
-    )
+    samplesheet_content = None
+    content_dict = None
+    try:
+        project_data_obj = convert_uri_to_project_data_obj(
+            sample_sheet_uri
+        )
+        samplesheet_content = read_icav2_file_contents(
+            project_id=project_data_obj.project_id,
+            data_id=project_data_obj.data.id
+        )
+    except Exception as e:
+        logger.error(f"Error getting samplesheet content from icav2 project data object for sample sheet uri {sample_sheet_uri}: {str(e)}.")
+        return None
 
-    samplesheet_content = read_icav2_file_contents(
-        project_id=project_data_obj.project_id,
-        data_id=project_data_obj.data.id
-    )
-    content_dict = parse_samplesheet(samplesheet_content)
+    if samplesheet_content:
+        content_dict = parse_samplesheet(samplesheet_content)
+    else:
+        logger.error(f"Error getting samplesheet content from sample sheet uri {sample_sheet_uri}.")
+        return None
 
     # create a new sequence object
     sequence = Sequence.objects.create(
