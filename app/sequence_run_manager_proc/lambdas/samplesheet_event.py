@@ -25,7 +25,7 @@ def event_handler(event, context):
         "version": "0",
         "id": "12345678-90ab-cdef-1234-567890abcdef",
         "detail-type": "SequenceRunSampleSheetChange",
-        "source": "external.sequencerunmanager",
+        "source": "external.otherservices",
         "account": "000000000000",
         "time": "2025-03-00T00:00:00Z",
         "region": "ap-southeast-2",
@@ -78,3 +78,11 @@ def event_handler(event, context):
         sample_sheet_srv.create_sequence_sample_sheet_from_srssc_event(event["detail"])
     elif event["detail-type"] == "WorkflowRunUpdate":
         sample_sheet_srv.validate_sample_sheet_from_wru_event(event["detail"])
+    else:
+        logger.error(f"Invalid event detail type: {event['detail-type']}")
+        return {
+            "message": f"Invalid event detail type: {event['detail-type']}",
+        }
+    return {
+        "message": "Sample sheet event processed successfully",
+    }
