@@ -325,9 +325,12 @@ export class SequenceRunManagerStack extends Stack {
       }
     );
     validateSampleSheetEventRule.addEventPattern({
-      detailType: ['WorkflowRunUpdate'],
-      source: ['orcabus.bclconvert'],
+      detailType: ['WorkflowRunStateChange'],
+      source: ['orcabus.workflowmanager'],
       detail: {
+        workflow: {
+          name: ['bclconvert'],
+        },
         payload: {
           data: {
             tags: {
