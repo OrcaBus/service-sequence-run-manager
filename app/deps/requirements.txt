@@ -17,6 +17,7 @@ psycopg[binary]==3.3.2
 Werkzeug==3.1.5
 libica==3.2
 libumccr==0.4.1
+wrapica==2.40.1
 cachetools==6.2.4
 serverless-wsgi==3.1.0
 # six and regex required by automatically generated EventBridge code binding
