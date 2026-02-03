@@ -29,17 +29,20 @@ example event:
             "createdBy": "created_by",
         }
     }
-2) WRU event payload dict
+2) WRSC event payload dict
     {
     "version": "0",
     "id": f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
-    "detail-type": "WorkflowRunUpdate",
-    "source": "orcabus.bclconvert",
+    "detail-type": "WorkflowRunStateChange",
+    "source": "orcabus.workflowmanager",
     "account": "000000000000",
     "time": "2025-03-00T00:00:00Z",
     "region": "ap-southeast-2",
     "resources": [],
     "detail": {
+        "workflow": {
+            "name": "bclconvert",
+        },
         "payload": {
             "data": {
                 "tags": {

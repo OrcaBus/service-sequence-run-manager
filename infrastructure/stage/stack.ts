@@ -313,7 +313,7 @@ export class SequenceRunManagerStack extends Stack {
     });
     procSampleSheetEventRule.addTarget(new LambdaFunction(fn));
 
-    // rule for validating the SampleSheet event from WRU event
+    // rule for validating the SampleSheet event from WRSC event
     // reference issue: https://github.com/OrcaBus/service-sequence-run-manager/issues/38
     const validateSampleSheetEventRule = new Rule(
       this,

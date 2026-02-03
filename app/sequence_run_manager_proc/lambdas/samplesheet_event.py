@@ -42,7 +42,7 @@ def event_handler(event, context):
         }
     }
 
-    2) WRU event payload dict
+    2) WRSC event payload dict
     {
         "version": "0",
         "id": "12345678-90ab-cdef-1234-567890abcdef",

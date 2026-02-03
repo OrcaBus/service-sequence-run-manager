@@ -268,6 +268,9 @@ class SequenceRunManagerProcFactory:
         mock_samplesheet_checksum_type = "md5"
         mock_samplesheet_uri = "icav2://222222_A01052_1234_BHVJJJJJJ/sample_sheet.csv"
         mock_detail = {
+            "workflow": {
+                "name": "bclconvert",
+            },
             "payload": {
                 "data": {
                     "tags": {
@@ -284,8 +287,8 @@ class SequenceRunManagerProcFactory:
         mock_event_message = {
             "version": "0",
             "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
-            "detail-type": "WorkflowRunUpdate",
-            "source": "orcabus.bclconvert",
+            "detail-type": "WorkflowRunStateChange",
+            "source": "orcabus.workflowmanager",
             "account": "444444444444",
             "time": "2024-11-02T21:58:22Z",
             "region": "ap-southeast-2",
