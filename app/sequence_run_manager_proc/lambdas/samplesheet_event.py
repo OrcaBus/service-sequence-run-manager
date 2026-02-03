@@ -10,7 +10,6 @@ import logging
 
 from sequence_run_manager_proc.services import sample_sheet_srv
 from libumccr import libjson
-from libumccr.aws import libeb
 # from libica.app import ENSEventType
 
 logger = logging.getLogger()
@@ -47,13 +46,16 @@ def event_handler(event, context):
     {
         "version": "0",
         "id": "12345678-90ab-cdef-1234-567890abcdef",
-        "detail-type": "WorkflowRunUpdate",
-        "source": "orcabus.bclconvert",
+        "detail-type": "WorkflowRunStateChange",
+        "source": "orcabus.workflowmanager",
         "account": "000000000000",
         "time": "2025-03-00T00:00:00Z",
         "region": "ap-southeast-2",
         "resources": [],
         "detail": {
+            "workflow": {
+                "name": "bclconvert",
+            },
             "payload": {
                 "data": {
                     "tags": {
@@ -76,8 +78,8 @@ def event_handler(event, context):
 
     if event["detail-type"] == "SequenceRunSampleSheetChange":
         sample_sheet_srv.create_sequence_sample_sheet_from_srssc_event(event["detail"])
-    elif event["detail-type"] == "WorkflowRunUpdate":
-        sample_sheet_srv.validate_sample_sheet_from_wru_event(event["detail"])
+    elif event["detail-type"] == "WorkflowRunStateChange":
+        sample_sheet_srv.validate_sample_sheet_from_wrsc_event(event["detail"])
     else:
         logger.error(f"Invalid event detail type: {event['detail-type']}")
         return {

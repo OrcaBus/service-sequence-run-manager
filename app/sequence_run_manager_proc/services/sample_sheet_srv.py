@@ -312,31 +312,31 @@ def get_sample_sheet_libraries(sample_sheet: SampleSheet):
 
 
 def calculate_checksum(sample_sheet_content_original: str, checksum_type: str = "sha256") -> str:
-        """
-        Calculate checksum from sample sheet content.
-        Args:
-            sample_sheet_content_original: Original CSV content of the sample sheet
-            checksum_type: Type of checksum to calculate (current only support 'sha256', 'md5', or 'crc32')
+    """
+    Calculate checksum from sample sheet content.
+    Args:
+        sample_sheet_content_original: Original CSV content of the sample sheet
+        checksum_type: Type of checksum to calculate (current only support 'sha256', 'md5', or 'crc32')
         Returns:
-            str: Checksum as hexadecimal string, or empty string if content is None/empty
-        """
-        if not sample_sheet_content_original:
-            return ""
-        try:
-            content_bytes = sample_sheet_content_original.encode('utf-8')
-            if checksum_type.lower() == "md5":
-                return hashlib.md5(content_bytes).hexdigest()
-            elif checksum_type.lower() == "crc32":
-                # CRC32 returns a signed integer, convert to unsigned and then to hex
-                crc32_value = zlib.crc32(content_bytes) & 0xffffffff
-                return format(crc32_value, '08x')
-            else:  # default to sha256
-                return hashlib.sha256(content_bytes).hexdigest()
-        except Exception as e:
-            logger.warning(f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}")
-            return ""
+        str: Checksum as hexadecimal string, or empty string if content is None/empty
+    """
+    if not sample_sheet_content_original:
+        return ""
+    try:
+        content_bytes = sample_sheet_content_original.encode('utf-8')
+        if checksum_type.lower() == "md5":
+            return hashlib.md5(content_bytes).hexdigest()
+        elif checksum_type.lower() == "crc32":
+            # CRC32 returns a signed integer, convert to unsigned and then to hex
+            crc32_value = zlib.crc32(content_bytes) & 0xffffffff
+            return format(crc32_value, '08x')
+        else:  # default to sha256
+            return hashlib.sha256(content_bytes).hexdigest()
+    except Exception as e:
+        logger.warning(f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}")
+        return ""
 
-def validate_sample_sheet_from_wru_event(event_detail: dict):
+def validate_sample_sheet_from_wrsc_event(event_detail: dict):
     """
     Validate the sample sheet from the event detail
     """
@@ -350,6 +350,8 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
     samplesheet_checksum_type = event_detail["payload"]["data"]["tags"]["samplesheetChecksumType"]
     sample_sheet_uri = event_detail["payload"]["data"]["inputs"]["sampleSheetUri"]
 
+    # step 1: check if the sample sheet exists in the database
+
     sequences = Sequence.objects.filter(instrument_run_id=instrument_run_id)
     sample_sheets = SampleSheet.objects.filter(sequence__in=sequences)
 
@@ -358,16 +360,13 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
     for sample_sheet in matching_sample_sheet:
 
         calculated_checksum = calculate_checksum(sample_sheet.sample_sheet_content_original, samplesheet_checksum_type)
-        if calculated_checksum == samplesheet_checksum and sample_sheet.sample_sheet_name == samplesheet_name:
+        if calculated_checksum == samplesheet_checksum:
             logger.info(f"Sample sheet {sample_sheet.sample_sheet_name} found for instrument run {instrument_run_id}")
             return sample_sheet
-        else:
-            logger.info(f"Sample sheet {sample_sheet.sample_sheet_name} Not matched for instrument run {instrument_run_id} with checksum {samplesheet_checksum} and checksum type {samplesheet_checksum_type}")
-            return None
 
     logger.info(f"No sample sheet found with name {samplesheet_name} for instrument run {instrument_run_id}, create a new ")
 
-    # when no match found, we need to create a new sample sheet from the sample sheet uri
+    # step 2: when no match found, we need to create a new sample sheet from the sample sheet uri
 
     # Get the samplesheet uri as a project data object
     samplesheet_content = None
@@ -397,6 +396,8 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
         sample_sheet_name=samplesheet_name,
         start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
     )
+    logger.info(f"Successfully created sequence {sequence.sequence_run_id} for instrument run {instrument_run_id}")
+
     sample_sheet = SampleSheet.objects.create(
         sequence=sequence,
         sample_sheet_name=samplesheet_name,
@@ -404,6 +405,7 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
         sample_sheet_content_original=samplesheet_content,  # Store original CSV as UTF-8 string
     )
     logger.info(f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wru event")
+
     # check if there is library linking change, if there is any change, create library associations and emit event to event bridge
     linking_libraries = get_sample_sheet_libraries(sample_sheet)
     if linking_libraries:
@@ -415,10 +417,3 @@ def validate_sample_sheet_from_wru_event(event_detail: dict):
             return
     else:
         logger.info(f"No library linking found in samplesheet for sequence run {sequence.sequence_run_id}")
-    return SampleSheetDomain(
-        instrument_run_id=instrument_run_id,
-        sequence_run_id=sequence.sequence_run_id,
-        sample_sheet=sample_sheet,
-        description=f"New sample sheet {sample_sheet.sample_sheet_name} created for sequence {sequence.sequence_run_id} from wru event",
-        sample_sheet_has_changed=True,
-    )
