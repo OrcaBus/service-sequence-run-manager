@@ -6,6 +6,8 @@ import base64
 import gzip
 import json
 from typing import Optional
+import hashlib
+import zlib
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.models.comment import Comment, TargetType
@@ -15,6 +17,10 @@ from sequence_run_manager_proc.services.sequence_library_srv import update_seque
 from sequence_run_manager_proc.services.sequence_srv import SequenceConfig
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
+from wrapica.project_data import (
+    read_icav2_file_contents,
+    convert_uri_to_project_data_obj
+)
 
 logger = logging.getLogger(__name__)
 
@@ -303,3 +309,106 @@ def get_sample_sheet_libraries(sample_sheet: SampleSheet):
 
     # remove repeated value
     return list(dict.fromkeys(entry["sample_id"] for entry in bclconvert_data))
+
+
+def calculate_checksum(sample_sheet_content_original: str, checksum_type: str = "sha256") -> str:
+    """
+    Calculate checksum from sample sheet content.
+    Args:
+        sample_sheet_content_original: Original CSV content of the sample sheet
+        checksum_type: Type of checksum to calculate (current only support 'sha256', 'md5', or 'crc32')
+        Returns:
+        str: Checksum as hexadecimal string, or empty string if content is None/empty
+    """
+    if not sample_sheet_content_original:
+        return ""
+    try:
+        content_bytes = sample_sheet_content_original.encode('utf-8')
+        if checksum_type.lower() == "md5":
+            return hashlib.md5(content_bytes).hexdigest()
+        elif checksum_type.lower() == "crc32":
+            # CRC32 returns a signed integer, convert to unsigned and then to hex
+            crc32_value = zlib.crc32(content_bytes) & 0xffffffff
+            return format(crc32_value, '08x')
+        else:  # default to sha256
+            return hashlib.sha256(content_bytes).hexdigest()
+    except Exception as e:
+        logger.warning(f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}")
+        return ""
+
+def validate_sample_sheet_from_wrsc_event(event_detail: dict):
+    """
+    Validate the sample sheet from the event detail
+    """
+    instrument_run_id = event_detail["payload"]["data"]["tags"]["instrumentRunId"]
+    samplesheet_checksum = event_detail["payload"]["data"]["tags"]["samplesheetChecksum"]
+    samplesheet_checksum_type = event_detail["payload"]["data"]["tags"]["samplesheetChecksumType"]
+    sample_sheet_uri = event_detail["payload"]["data"]["inputs"]["sampleSheetUri"]
+
+    # step 1: check if the sample sheet exists in the database
+
+    sequences = Sequence.objects.filter(instrument_run_id=instrument_run_id)
+    sample_sheets = SampleSheet.objects.filter(sequence__in=sequences)
+
+    samplesheet_name = sample_sheet_uri.split("/")[-1]
+    matching_sample_sheet = sample_sheets.filter(sample_sheet_name=samplesheet_name)
+    for sample_sheet in matching_sample_sheet:
+
+        calculated_checksum = calculate_checksum(sample_sheet.sample_sheet_content_original, samplesheet_checksum_type)
+        if calculated_checksum == samplesheet_checksum:
+            logger.info(f"Sample sheet {sample_sheet.sample_sheet_name} found for instrument run {instrument_run_id}")
+            return sample_sheet
+
+    logger.info(f"No sample sheet found with name {samplesheet_name} for instrument run {instrument_run_id}, create a new ")
+
+    # step 2: when no match found, we need to create a new sample sheet from the sample sheet uri
+
+    # Get the samplesheet uri as a project data object
+    samplesheet_content = None
+    content_dict = None
+    try:
+        project_data_obj = convert_uri_to_project_data_obj(
+            sample_sheet_uri
+        )
+        samplesheet_content = read_icav2_file_contents(
+            project_id=project_data_obj.project_id,
+            data_id=project_data_obj.data.id
+        )
+    except Exception as e:
+        logger.error(f"Error getting samplesheet content from icav2 project data object for sample sheet uri {sample_sheet_uri}: {str(e)}.")
+        return None
+
+    if samplesheet_content:
+        content_dict = parse_samplesheet(samplesheet_content)
+    else:
+        logger.error(f"Error getting samplesheet content from sample sheet uri {sample_sheet_uri}.")
+        return None
+
+    # create a new sequence object
+    sequence = Sequence.objects.create(
+        instrument_run_id=instrument_run_id,
+        sequence_run_id="r."+ulid.new().str,
+        sample_sheet_name=samplesheet_name,
+        start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
+    )
+    logger.info(f"Successfully created sequence {sequence.sequence_run_id} for instrument run {instrument_run_id}")
+
+    sample_sheet = SampleSheet.objects.create(
+        sequence=sequence,
+        sample_sheet_name=samplesheet_name,
+        sample_sheet_content=content_dict,
+        sample_sheet_content_original=samplesheet_content,  # Store original CSV as UTF-8 string
+    )
+    logger.info(f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wrsc event")
+
+    # check if there is library linking change, if there is any change, create library associations and emit event to event bridge
+    linking_libraries = get_sample_sheet_libraries(sample_sheet)
+    if linking_libraries:
+        # update the sequence run libraries linking
+        try:
+            update_sequence_run_libraries_linking(sequence, linking_libraries)
+        except Exception as e:
+            logger.error(f"Error updating sequence run libraries linking for sequence {sequence.sequence_run_id}: {str(e)}")
+            return
+    else:
+        logger.info(f"No library linking found in samplesheet for sequence run {sequence.sequence_run_id}")

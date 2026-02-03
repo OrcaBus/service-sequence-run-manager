@@ -295,12 +295,12 @@ export class SequenceRunManagerStack extends Stack {
   }
 
   private setupProcSampleSheetEventRule(fn: IFunction) {
-    const eventRule = new Rule(this, this.stackName + 'ProcSampleSheetEventRule', {
+    const procSampleSheetEventRule = new Rule(this, this.stackName + 'ProcSampleSheetEventRule', {
       ruleName: this.stackName + 'ProcSampleSheetEventRule',
-      description: 'Rule to send SampleSheet events to the ProcSampleSheetHandler Lambda',
+      description: 'Rule for procurement of SampleSheet from SRSSC event',
       eventBus: this.mainBus,
     });
-    eventRule.addEventPattern({
+    procSampleSheetEventRule.addEventPattern({
       detailType: ['SequenceRunSampleSheetChange'],
       // @ts-expect-error anything-but is not supported in the type definition
       source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
@@ -311,7 +311,41 @@ export class SequenceRunManagerStack extends Stack {
         samplesheetBase64gz: [{ exists: true }],
       },
     });
-    eventRule.addTarget(new LambdaFunction(fn));
+    procSampleSheetEventRule.addTarget(new LambdaFunction(fn));
+
+    // rule for validating the SampleSheet event from WRSC event
+    // reference issue: https://github.com/OrcaBus/service-sequence-run-manager/issues/38
+    const validateSampleSheetEventRule = new Rule(
+      this,
+      this.stackName + 'ValidateSampleSheetEventRule',
+      {
+        ruleName: this.stackName + 'ValidateSampleSheetEventRule',
+        description: 'Rule for validating the SampleSheet event from WRSC event',
+        eventBus: this.mainBus,
+      }
+    );
+    validateSampleSheetEventRule.addEventPattern({
+      detailType: ['WorkflowRunStateChange'],
+      source: ['orcabus.workflowmanager'],
+      detail: {
+        workflow: {
+          name: ['bclconvert'],
+        },
+        payload: {
+          data: {
+            tags: {
+              instrumentRunId: [{ exists: true }],
+              samplesheetChecksum: [{ exists: true }],
+              samplesheetChecksumType: [{ exists: true }],
+            },
+            inputs: {
+              sampleSheetUri: [{ exists: true }],
+            },
+          },
+        },
+      },
+    });
+    validateSampleSheetEventRule.addTarget(new LambdaFunction(fn));
   }
 
   private createProcLibraryLinkingHandler() {

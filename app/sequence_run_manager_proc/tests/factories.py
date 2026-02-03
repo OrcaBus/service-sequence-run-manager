@@ -1,6 +1,7 @@
 from sequence_run_manager.tests.factories import TestConstant
-
+import hashlib
 class SequenceRunManagerProcFactory:
+    @staticmethod
     def bssh_event_message(mock_run_status: str = "New"):
         mock_sequence_run_id = TestConstant.sequence_run_id.value
         mock_instrument_run_id = TestConstant.instrument_run_id.value
@@ -46,6 +47,7 @@ class SequenceRunManagerProcFactory:
 
         return orcabus_event_message
 
+    @staticmethod
     def mock_bssh_run_details():
         mock_run_details = {
                 "Id": "r.ACGTlKjDgEy099ioQOeOWg",
@@ -142,6 +144,7 @@ class SequenceRunManagerProcFactory:
             }
         return mock_run_details
 
+    @staticmethod
     def mock_bssh_libraries():
         mock_libraries = [
             "L06789ABCD",
@@ -149,6 +152,7 @@ class SequenceRunManagerProcFactory:
         ]
         return mock_libraries
 
+    @staticmethod
     def mock_bssh_sample_sheet():
         """example sample sheet content from 'v2-samplesheet-maker'"""
         mock_sample_sheet = """
@@ -181,6 +185,7 @@ class SequenceRunManagerProcFactory:
             1,MySecondSample,GGGGGGGGGG,TTTTTTTT,SampleProject""".strip()
         return mock_sample_sheet
 
+    @staticmethod
     def mock_bssh_sample_sheet_dict():
         """mock sample sheet as a dictionary"""
         mock_sample_sheet = {
@@ -224,7 +229,9 @@ class SequenceRunManagerProcFactory:
                 },
             ]
         }
+        return mock_sample_sheet
 
+    @staticmethod
     def mock_sample_sheet_change_event_message():
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_time_stamp = "2024-11-02T21:58:13.7451620Z"
@@ -243,8 +250,8 @@ class SequenceRunManagerProcFactory:
         orcabus_event_message = {
             "version": "0",
             "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
-            "detail-type": "Event from aws:sqs",
-            "source": "Pipe IcaEventPipeConstru-xxxxxxxx",
+            "detail-type": "SequenceRunSampleSheetChange",
+            "source": "external.otherservices",
             "account": "444444444444",
             "time": "2024-11-02T21:58:22Z",
             "region": "ap-southeast-2",
@@ -253,6 +260,44 @@ class SequenceRunManagerProcFactory:
         }
         return orcabus_event_message
 
+    @staticmethod
+    def mock_workflow_run_update_event_message():
+        mock_instrument_run_id = TestConstant.instrument_run_id.value
+        mock_sample_sheet_content = SequenceRunManagerProcFactory.mock_bssh_sample_sheet()
+        mock_samplesheet_checksum = hashlib.md5(mock_sample_sheet_content.encode('utf-8')).hexdigest()
+        mock_samplesheet_checksum_type = "md5"
+        mock_samplesheet_uri = "icav2://222222_A01052_1234_BHVJJJJJJ/sample_sheet.csv"
+        mock_detail = {
+            "workflow": {
+                "name": "bclconvert",
+            },
+            "payload": {
+                "data": {
+                    "tags": {
+                        "instrumentRunId": mock_instrument_run_id,
+                        "samplesheetChecksum": mock_samplesheet_checksum,
+                        "samplesheetChecksumType": mock_samplesheet_checksum_type,
+                    },
+                    "inputs": {
+                        "sampleSheetUri": mock_samplesheet_uri,
+                    }
+                }
+            }
+        }
+        mock_event_message = {
+            "version": "0",
+            "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
+            "detail-type": "WorkflowRunStateChange",
+            "source": "orcabus.workflowmanager",
+            "account": "444444444444",
+            "time": "2024-11-02T21:58:22Z",
+            "region": "ap-southeast-2",
+            "resources": [],
+            "detail": mock_detail
+        }
+        return mock_event_message
+
+    @staticmethod
     def mock_library_linking_change_event_message(sequence_run_id: str):
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_sequence_run_id = sequence_run_id
