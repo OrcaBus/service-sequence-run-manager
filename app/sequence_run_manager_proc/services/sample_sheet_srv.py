@@ -399,7 +399,7 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
         sample_sheet_content=content_dict,
         sample_sheet_content_original=samplesheet_content,  # Store original CSV as UTF-8 string
     )
-    logger.info(f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wru event")
+    logger.info(f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wrsc event")
 
     # check if there is library linking change, if there is any change, create library associations and emit event to event bridge
     linking_libraries = get_sample_sheet_libraries(sample_sheet)
@@ -408,7 +408,7 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
         try:
             update_sequence_run_libraries_linking(sequence, linking_libraries)
         except Exception as e:
-            logger.error(f"Error updating sequence run libraries linking for sequence {sequence.sequence_run_id}: {str(e)}. Will retry on next state change.")
+            logger.error(f"Error updating sequence run libraries linking for sequence {sequence.sequence_run_id}: {str(e)}")
             return
     else:
         logger.info(f"No library linking found in samplesheet for sequence run {sequence.sequence_run_id}")
