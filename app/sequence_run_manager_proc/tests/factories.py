@@ -1,6 +1,7 @@
 from sequence_run_manager.tests.factories import TestConstant
 import hashlib
 class SequenceRunManagerProcFactory:
+    @staticmethod
     def bssh_event_message(mock_run_status: str = "New"):
         mock_sequence_run_id = TestConstant.sequence_run_id.value
         mock_instrument_run_id = TestConstant.instrument_run_id.value
@@ -46,6 +47,7 @@ class SequenceRunManagerProcFactory:
 
         return orcabus_event_message
 
+    @staticmethod
     def mock_bssh_run_details():
         mock_run_details = {
                 "Id": "r.ACGTlKjDgEy099ioQOeOWg",
@@ -142,6 +144,7 @@ class SequenceRunManagerProcFactory:
             }
         return mock_run_details
 
+    @staticmethod
     def mock_bssh_libraries():
         mock_libraries = [
             "L06789ABCD",
@@ -149,6 +152,7 @@ class SequenceRunManagerProcFactory:
         ]
         return mock_libraries
 
+    @staticmethod
     def mock_bssh_sample_sheet():
         """example sample sheet content from 'v2-samplesheet-maker'"""
         mock_sample_sheet = """
@@ -181,6 +185,7 @@ class SequenceRunManagerProcFactory:
             1,MySecondSample,GGGGGGGGGG,TTTTTTTT,SampleProject""".strip()
         return mock_sample_sheet
 
+    @staticmethod
     def mock_bssh_sample_sheet_dict():
         """mock sample sheet as a dictionary"""
         mock_sample_sheet = {
@@ -224,7 +229,9 @@ class SequenceRunManagerProcFactory:
                 },
             ]
         }
+        return mock_sample_sheet
 
+    @staticmethod
     def mock_sample_sheet_change_event_message():
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_time_stamp = "2024-11-02T21:58:13.7451620Z"
@@ -253,6 +260,7 @@ class SequenceRunManagerProcFactory:
         }
         return orcabus_event_message
 
+    @staticmethod
     def mock_workflow_run_update_event_message():
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_sample_sheet_content = SequenceRunManagerProcFactory.mock_bssh_sample_sheet()
@@ -286,6 +294,7 @@ class SequenceRunManagerProcFactory:
         }
         return mock_event_message
 
+    @staticmethod
     def mock_library_linking_change_event_message(sequence_run_id: str):
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_sequence_run_id = sequence_run_id
