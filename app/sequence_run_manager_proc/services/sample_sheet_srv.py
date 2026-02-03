@@ -340,11 +340,6 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
     """
     Validate the sample sheet from the event detail
     """
-    assert event_detail["payload"]["data"]["tags"]["instrumentRunId"] is not None, "instrument run id is required"
-    assert event_detail["payload"]["data"]["tags"]["samplesheetChecksum"] is not None, "sample sheet checksum is required"
-    assert event_detail["payload"]["data"]["tags"]["samplesheetChecksumType"] is not None, "sample sheet checksum type is required"
-    assert event_detail["payload"]["data"]["inputs"]["sampleSheetUri"] is not None, "sample sheet uri is required"
-
     instrument_run_id = event_detail["payload"]["data"]["tags"]["instrumentRunId"]
     samplesheet_checksum = event_detail["payload"]["data"]["tags"]["samplesheetChecksum"]
     samplesheet_checksum_type = event_detail["payload"]["data"]["tags"]["samplesheetChecksumType"]
