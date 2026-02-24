@@ -22,14 +22,14 @@
     "experimentalDecorators": true,
     "resolveJsonModule": true,
     "strictPropertyInitialization": false,
-    "typeRoots": [
-      "./node_modules/@types"
-    ],
     "skipLibCheck": true,
-    "allowJs": true
+    "allowJs": true,
+    "types": ["node", "jest"]
   },
   "exclude": [
     "node_modules",
     "cdk.out",
+    "app/venv",
+    "eslint.config.mjs"
   ]
 }
