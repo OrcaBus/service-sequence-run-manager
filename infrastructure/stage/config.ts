@@ -30,6 +30,17 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
     PROD: 'https://sequence.prod.umccr.org',
   };
 
+  /*
+  ICAv2 Resources
+  These are generated in the Infrastructure stack under
+  https://github.com/umccr/infrastructure/tree/master/cdk/apps/icav2_credentials
+  */
+  const icav2AccessTokenSecretIdDict: Record<StageName, string> = {
+    ['BETA']: 'ICAv2JWTKey-umccr-prod-service-dev', // pragma: allowlist secret
+    ['GAMMA']: 'ICAv2JWTKey-umccr-prod-service-staging', // pragma: allowlist secret
+    ['PROD']: 'ICAv2JWTKey-umccr-prod-service-production', // pragma: allowlist secret
+  };
+
   return {
     vpcProps: VPC_LOOKUP_PROPS,
     lambdaSecurityGroupName: SHARED_SECURITY_GROUP_NAME,
@@ -43,5 +54,6 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
     slackTopicName: slackTopicNameDict[stage],
     orcabusUIBaseUrl: orcabusUIBaseUrlDict[stage],
     sequenceRunManagerBaseApiUrl: sequenceRunManagerBaseApiUrlDict[stage],
+    icav2AccessTokenSecretId: icav2AccessTokenSecretIdDict[stage],
   };
 };

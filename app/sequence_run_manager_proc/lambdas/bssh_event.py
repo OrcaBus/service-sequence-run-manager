@@ -21,16 +21,9 @@ from sequence_run_manager_proc.services import sequence_srv, sequence_state_srv,
 
 from libumccr import libjson
 from libumccr.aws import libeb
-# from libica.app import ENSEventType
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-# IMPLEMENTED_ENS_TYPES = [
-#     ENSEventType.BSSH_RUNS.value,
-# ]
-
-# PRODUCED_BY_BSSH = ["BaseSpaceSequenceHub"]
 
 
 def event_handler(event, context):

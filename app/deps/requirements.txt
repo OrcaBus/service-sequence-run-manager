@@ -14,10 +14,9 @@ django-iam-dbauth==0.2.1
 
 # See psycopg[binary] or psycopg[c] impl https://www.psycopg.org/psycopg3/docs/basic/install.html
 psycopg[binary]==3.3.2
-Werkzeug==3.1.5
+Werkzeug==3.1.6
 libica==3.2
 libumccr==0.4.1
-wrapica==2.40.1.post20260224123747
 cachetools==6.2.4
 serverless-wsgi==3.1.0
 # six and regex required by automatically generated EventBridge code binding
