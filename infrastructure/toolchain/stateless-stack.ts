@@ -22,6 +22,16 @@ export class StatelessStack extends cdk.Stack {
       cdkSynthCmd: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm cdk synth'],
       unitAppTestConfig: {
         command: ['cd app', 'make install', 'make test'],
+        partialBuildSpec: {
+          phases: {
+            install: {
+              'runtime-versions': {
+                python: '3.12',
+              },
+            },
+          },
+          version: '0.2',
+        },
       },
     });
   }
