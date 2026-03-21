@@ -19,9 +19,9 @@ export const getSequenceRunManagerStackProps = (stage: StageName): SequenceRunMa
   };
 
   const orcabusUIBaseUrlDict: Record<StageName, string> = {
-    BETA: 'https://orcaui.dev.umccr.org',
-    GAMMA: 'https://orcaui.stg.umccr.org',
-    PROD: 'https://orcaui.umccr.org',
+    BETA: 'https://portal.dev.umccr.org',
+    GAMMA: 'https://portal.stg.umccr.org',
+    PROD: 'https://portal.umccr.org',
   };
 
   const sequenceRunManagerBaseApiUrlDict: Record<StageName, string> = {
