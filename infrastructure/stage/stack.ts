@@ -460,7 +460,7 @@ export class SequenceRunManagerStack extends Stack {
               '',
               ':microscope: <' +
                 orcabusUIBaseUrl +
-                '/runs/sequence/' +
+                '/sequence/' +
                 EventField.fromPath('$.detail.instrumentRunId') +
                 '|View in Orcabus UI>',
               '',
