@@ -1,7 +1,4 @@
-import base64
-import gzip
 import ulid
-from typing import Optional
 from django.utils import timezone
 import logging
 from rest_framework import status
@@ -11,6 +8,7 @@ from rest_framework.response import Response
 
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
+from sequence_run_manager.serializers.sequence_run_action import AddSampleSheetSerializer
 from sequence_run_manager.models import Sequence, SampleSheet, LibraryAssociation, Comment
 from sequence_run_manager.models.comment import TargetType
 from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
@@ -31,31 +29,7 @@ class SequenceRunActionViewSet(ViewSet):
     """
 
     @extend_schema(
-        request={
-            'multipart/form-data': {
-                'type': 'object',
-                'properties': {
-                    'file': {
-                        'type': 'string',
-                        'format': 'binary',
-                        'description': 'The sample sheet file to upload'
-                    },
-                    'instrument_run_id': {
-                        'type': 'string',
-                        'description': 'The instrument run ID to associate with the sample sheet'
-                    },
-                    'created_by': {
-                        'type': 'string',
-                        'description': 'The user who is creating this sample sheet'
-                    },
-                    'comment': {
-                        'type': 'string',
-                        'description': 'Comment about the sample sheet'
-                    }
-                },
-                'required': ['file', 'instrument_run_id', 'created_by', 'comment']
-            }
-        },
+        request=AddSampleSheetSerializer,
         responses={
             200: OpenApiResponse(description="Sample sheet added successfully"),
             400: OpenApiResponse(description="Missing required fields or invalid input"),
@@ -69,20 +43,13 @@ class SequenceRunActionViewSet(ViewSet):
         """
         upload sample sheet for a sequence run
         """
-        # get uploaded samplesheet
-        uploaded_samplesheet = request.FILES.get('file')
-        if not uploaded_samplesheet:
-            return Response({"detail": "No samplesheet uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = AddSampleSheetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        uploaded_samplesheet = serializer.validated_data["file"]
         samplesheet_name = uploaded_samplesheet.name
-        instrument_run_id = request.POST.get('instrument_run_id')
-        if not instrument_run_id:
-            return Response({"detail": "instrument_run_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-        created_by = request.POST.get('created_by')
-        if not created_by:
-            return Response({"detail": "created_by is required"}, status=status.HTTP_400_BAD_REQUEST)
-        comment = request.POST.get('comment')
-        if not comment:
-            return Response({"detail": "comment is required"}, status=status.HTTP_400_BAD_REQUEST)
+        instrument_run_id = serializer.validated_data["instrument_run_id"]
+        created_by = serializer.validated_data["created_by"]
+        comment = serializer.validated_data["comment"]
 
         # step 1: create a fake sequence run
         sequence_run = Sequence.objects.create(
@@ -93,8 +60,8 @@ class SequenceRunActionViewSet(ViewSet):
         )
         logger.info(f"Sequence run created for instrument run {instrument_run_id}")
 
-        # step 2: read the uploaded samplesheet, and encodeed with base64
-        samplesheet_content = ''
+        # step 2: read the uploaded samplesheet
+        samplesheet_content = b""
         with uploaded_samplesheet.open('rb') as f:
             samplesheet_content = f.read()
 
@@ -124,7 +91,6 @@ class SequenceRunActionViewSet(ViewSet):
         logger.info(f"Samplesheet saved for sequence run {sequence_run.sequence_run_id}, and comment {comment_obj.orcabus_id} saved")
 
         # step 4: construct event bridge detail and emit event to event bridge
-        # samplesheet_base64_gz = base64.b64encode(gzip.compress(samplesheet_content)).decode('utf-8')
         samplesheet_change_eb_payload = construct_samplesheet_change_eb_payload(sequence_run, sample_sheet, comment_obj)
 
         try:

@@ -4,18 +4,44 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
-
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.types import OpenApiTypes
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.sequence import Sequence
-from sequence_run_manager.serializers.comment import CommentSerializer
+from sequence_run_manager.serializers.comment import CommentSerializer, CommentCreateRequestSerializer, CommentUpdateRequestSerializer
+from sequence_run_manager.viewsets.base import get_email_from_bearer_authorization
 
 
+@extend_schema_view(
+    create=extend_schema(
+        request=CommentCreateRequestSerializer,
+        responses={201: CommentSerializer},
+        description=(
+            "Create a comment (body: `comment`, `created_by`). "
+        ),
+    ),
+    partial_update=extend_schema(
+        request=CommentUpdateRequestSerializer,
+        responses={200: CommentSerializer},
+        description=(
+            "Update comment text. Authorization is derived from `Authorization: Bearer <jwt>` (email claim "
+            "must match the comment's original `created_by`). Request accepts `comment` and optional "
+            "`created_by` (empty allowed; ignored for the update)."
+        ),
+    ),
+    destroy=extend_schema(
+        request=None,
+        responses={204: None},
+        description="Soft-delete. Caller must present Authorization: Bearer <jwt> (RS256); email claim must match comment author (created_by). Signature is not verified here — authenticate at API Gateway.",
+    ),
+)
 class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.ListModelMixin, GenericViewSet):
     serializer_class = CommentSerializer
     search_fields = Comment.get_base_fields()
-    http_method_names = ['get', 'post', 'patch', 'delete']
     pagination_class = None
     lookup_value_regex = "[^/]+" # to allow id prefix
+    # PatchOnlyViewSet excludes PUT; we extend it with DELETE for soft-delete.
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options', 'trace']
 
     def get_queryset(self):
         return Comment.objects.filter(
@@ -35,50 +61,50 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
         except Sequence.DoesNotExist:
             return Response({"detail": "SequenceRun not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Check if created_by and comment are provided
-        if not request.data.get('created_by') or not request.data.get('comment'):
-            return Response({"detail": "created_by and comment are required."}, status=status.HTTP_400_BAD_REQUEST)
+        # Validate input payload shape: only `comment` + `created_by`
+        input_serializer = CommentCreateRequestSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
 
-        # Add workflow_run_id to the request data
-        mutable_data = request.data.copy()
-        mutable_data['target_id'] = seq_orcabus_id
-        mutable_data['target_type'] = TargetType.SEQUENCE
-        comment_obj = Comment.objects.create( **mutable_data)
+        comment_obj = Comment.objects.create(
+            target_id=seq_orcabus_id,
+            target_type=TargetType.SEQUENCE,
+            **input_serializer.validated_data,
+        )
         serializer = self.get_serializer(comment_obj)
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
-        instance = self.get_object()
+        instance = self.get_object() # PATCH always calls this with partial=True; we don't use it.
 
-        # Check if the user updating the comment is the same as the one who created it
-        if instance.created_by != request.data.get('created_by'):
+        body = CommentUpdateRequestSerializer(data=request.data, partial=partial)
+        body.is_valid(raise_exception=True)
+        vd = body.validated_data
+
+        if "created_by" in vd:
+            actor = vd["created_by"].strip().lower()
+        else:
+            actor = get_email_from_bearer_authorization(request)
+        author = (instance.created_by or "").strip().lower()
+        if author != actor:
             raise PermissionDenied("You don't have permission to update this comment.")
 
-        # Ensure only the comment field can be updated
-        if set(request.data.keys()) - {'comment', 'created_by'}:
-            return Response({"detail": "Only the comment field can be updated."},
-                            status=status.HTTP_400_BAD_REQUEST)
+        instance.comment = vd["comment"]
+        instance.save(update_fields=["comment", "updated_at"])
 
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_200_OK, headers=headers)
+        data = CommentSerializer(instance).data # return the updated comment
+        headers = self.get_success_headers(data)
+        return Response(data, status=status.HTTP_200_OK, headers=headers)
 
-    def perform_update(self, serializer):
-        serializer.save()
-
-    @action(detail=True, methods=['delete'])
-    def soft_delete(self, request, *args, **kwargs):
+    def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-
-        # Check if the user deleting the comment is the same as the one who created it
-        if instance.created_by != request.data.get('created_by'):
+        email = get_email_from_bearer_authorization(request)
+        author = (instance.created_by or "").strip().lower()
+        if email != author:
             raise PermissionDenied("You don't have permission to delete this comment.")
 
+        # Soft-delete only flips is_deleted; severity (and text) stay for audit/UI history.
         instance.is_deleted = True
-        instance.save()
-
-        return Response({"detail": "Comment successfully marked as deleted."}, status=status.HTTP_204_NO_CONTENT)
+        instance.save(update_fields=["is_deleted", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)

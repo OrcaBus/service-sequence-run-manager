@@ -44,10 +44,13 @@ class SequenceViewSet(GenericViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-    @extend_schema(responses=OpenApiTypes.OBJECT, description="Valid states map for new state creation, update")
-    @action(detail=False, methods=['get'], url_name='valid_states_map', url_path='valid_states_map')
-    def get_valid_states_map(self, request, **kwargs):
-        return Response(StateViewSet.valid_states_map, status=status.HTTP_200_OK)
+    @extend_schema(responses=OpenApiTypes.OBJECT, description="States transition validation map for state creation, update")
+    @action(detail=False, methods=['get'], url_name='get_states_transition_validation_map', url_path='get_states_transition_validation_map')
+    def get_states_transition_validation_map(self, request, **kwargs):
+        """
+        Get states transition validation map
+        """
+        return Response(StateViewSet.states_transition_validation_map, status=status.HTTP_200_OK)
 
 
     @extend_schema(responses=CommentSerializer(many=True), description="Get all comments by instrument run id")

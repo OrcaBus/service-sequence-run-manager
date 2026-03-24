@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 from unittest.mock import patch
+import base64
+import json
 
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -194,14 +196,21 @@ class SequenceViewSetTestCase(TestCase):
         logger.info("Delete sequence comment")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
-        # Use the soft_delete action endpoint instead of direct DELETE
-        # Note: created_by must match the original creator "TestUser" from setUp
-        # APIClient uses format='json' instead of content_type
+
+        # Build a minimal JWT-like bearer token. The view decodes payload (email)
+        # without signature verification and compares to comment.created_by.
+        def _b64url(data: dict) -> str:
+            return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
+
+        token = ".".join([
+            _b64url({"alg": "RS256", "typ": "JWT"}),
+            _b64url({"email": "TestUser"}),
+            _b64url({"sig": "test"}),
+        ])
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
         response = self.client.delete(
-            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/soft_delete/",
-            {
-                "created_by": "TestUser",  # Must match setUp
-            },
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             format='json'
         )
         self.assertEqual(response.status_code, 204, "No content status response is expected")
