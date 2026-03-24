@@ -57,19 +57,12 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         Create a customed new state for a sequence run.
         Currently we support "Resolved"
         """
-        allowed_fields = {"status", "comment"}
         required_fields = {"status", "comment"}
         provided_fields = set(request.data.keys())
 
         if required_fields - provided_fields:
             return Response(
                 {"detail": "status and comment fields are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if provided_fields - allowed_fields:
-            return Response(
-                {"detail": "Only status and comment fields are allowed."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -116,19 +109,12 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
-        allowed_fields = {"comment"}
         required_fields = {"comment"}
         provided_fields = set(request.data.keys())
 
         if required_fields - provided_fields:
             return Response(
                 {"detail": "comment field is required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if provided_fields - allowed_fields:
-            return Response(
-                {"detail": "Only comment field can be updated."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
