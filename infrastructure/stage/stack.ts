@@ -299,6 +299,7 @@ export class SequenceRunManagerStack extends Stack {
       index: 'sequence_run_manager_proc/lambdas/samplesheet_event.py',
       handler: 'event_handler',
       timeout: Duration.minutes(2),
+      memorySize: 512,
     });
 
     this.mainBus.grantPutEventsTo(procSampleSheetFn);
@@ -364,6 +365,7 @@ export class SequenceRunManagerStack extends Stack {
       index: 'sequence_run_manager_proc/lambdas/librarylinking_event.py',
       handler: 'event_handler',
       timeout: Duration.minutes(2),
+      memorySize: 512,
     });
 
     this.mainBus.grantPutEventsTo(procLibraryLinkingFn);
