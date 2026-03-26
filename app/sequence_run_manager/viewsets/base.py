@@ -64,6 +64,8 @@ def get_email_from_bearer_authorization(request, keyword: str = "Bearer") -> str
     if email and isinstance(email, str) and email.strip():
         return email.strip().lower()
     raise AuthenticationFailed("Token payload did not contain a valid email claim.")
+
+
 class BaseViewSet(ReadOnlyModelViewSet, ABC):
     lookup_value_regex = "[^/]+"  # This is to allow for special characters in the URL
     ordering_fields = "__all__"
