@@ -10,7 +10,6 @@ import logging
 
 from sequence_run_manager_proc.services import sample_sheet_srv
 from libumccr import libjson
-# from libica.app import ENSEventType
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
