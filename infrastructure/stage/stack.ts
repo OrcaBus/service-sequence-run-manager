@@ -45,6 +45,7 @@ export interface SequenceRunManagerStackProps {
   slackTopicName: string;
   orcabusUIBaseUrl: string;
   sequenceRunManagerBaseApiUrl: string;
+  icav2AccessTokenSecretId: string;
 }
 
 export class SequenceRunManagerStack extends Stack {
@@ -109,12 +110,21 @@ export class SequenceRunManagerStack extends Stack {
     });
     dbCluster.grantConnect(this.lambdaRole, this.SEQUENCE_RUN_MANAGER_DB_USER);
 
+    // Get the bssh token secret
     const bsshTokenSecret = aws_secretsmanager.Secret.fromSecretNameV2(
       this,
       'BsshTokenSecret',
       props.bsshTokenSecretName
     );
     bsshTokenSecret.grantRead(this.lambdaRole);
+
+    // Get the icav2 secret
+    const icav2AccessTokenSecret = aws_secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'ICAv2AccessTokenSecret',
+      props.icav2AccessTokenSecretId
+    );
+    icav2AccessTokenSecret.grantRead(this.lambdaRole);
 
     this.lambdaEnv = {
       DJANGO_SETTINGS_MODULE: 'sequence_run_manager.settings.aws',
@@ -123,6 +133,7 @@ export class SequenceRunManagerStack extends Stack {
       PG_USER: this.SEQUENCE_RUN_MANAGER_DB_USER,
       PG_DB_NAME: this.SEQUENCE_RUN_MANAGER_DB_NAME,
       BASESPACE_ACCESS_TOKEN_SECRET_ID: props.bsshTokenSecretName,
+      ICAV2_ACCESS_TOKEN_SECRET_ID: props.icav2AccessTokenSecretId,
       SEQUENCE_RUN_MANAGER_BASE_API_URL: props.sequenceRunManagerBaseApiUrl,
     };
 
@@ -288,6 +299,7 @@ export class SequenceRunManagerStack extends Stack {
       index: 'sequence_run_manager_proc/lambdas/samplesheet_event.py',
       handler: 'event_handler',
       timeout: Duration.minutes(2),
+      memorySize: 512,
     });
 
     this.mainBus.grantPutEventsTo(procSampleSheetFn);
@@ -353,6 +365,7 @@ export class SequenceRunManagerStack extends Stack {
       index: 'sequence_run_manager_proc/lambdas/librarylinking_event.py',
       handler: 'event_handler',
       timeout: Duration.minutes(2),
+      memorySize: 512,
     });
 
     this.mainBus.grantPutEventsTo(procLibraryLinkingFn);

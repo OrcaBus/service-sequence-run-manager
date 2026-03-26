@@ -1,12 +1,12 @@
 import logging
 import os
 from typing import Dict, Any, Optional, List
-import json
 from libumccr.aws import libsm
 import requests
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_BSSH_BASE_URL = "https://api.aps2.sh.basespace.illumina.com/v2/"
 class BSSHService:
 
     """Service class for BSSH (BaseSpace Sequence Hub) operations"""
@@ -25,7 +25,7 @@ class BSSHService:
             'Authorization': f'Bearer {BASESPACE_ACCESS_TOKEN}',
             'Content-Type': 'application/json'
         }
-        self.base_url = "https://api.aps2.sh.basespace.illumina.com/v2/"
+        self.base_url = os.environ.get("BSSH_BASE_URL", DEFAULT_BSSH_BASE_URL)
 
 
     def handle_request_error(self, e: Exception, operation: str):

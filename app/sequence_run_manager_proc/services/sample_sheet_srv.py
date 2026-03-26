@@ -17,10 +17,7 @@ from sequence_run_manager_proc.services.sequence_library_srv import update_seque
 from sequence_run_manager_proc.services.sequence_srv import SequenceConfig
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
-from wrapica.project_data import (
-    read_icav2_file_contents,
-    convert_uri_to_project_data_obj
-)
+from sequence_run_manager_proc.services.ica_srv import ICAService
 
 logger = logging.getLogger(__name__)
 
@@ -367,13 +364,8 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
     samplesheet_content = None
     content_dict = None
     try:
-        project_data_obj = convert_uri_to_project_data_obj(
-            sample_sheet_uri
-        )
-        samplesheet_content = read_icav2_file_contents(
-            project_id=project_data_obj.project_id,
-            data_id=project_data_obj.data.id
-        )
+        ica_svc = ICAService()
+        samplesheet_content = ica_svc.get_file_contents_from_uri(sample_sheet_uri)
     except Exception as e:
         logger.error(f"Error getting samplesheet content from icav2 project data object for sample sheet uri {sample_sheet_uri}: {str(e)}.")
         return None
