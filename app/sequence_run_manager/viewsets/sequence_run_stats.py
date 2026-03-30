@@ -1,78 +1,96 @@
-from rest_framework.viewsets import GenericViewSet
-from rest_framework.decorators import action
-from drf_spectacular.utils import extend_schema
-from rest_framework.response import Response
 from django.db import models
 from django.db.models import Q
+from drf_spectacular.utils import extend_schema
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
 
-from sequence_run_manager.models.sequence import Sequence
-from sequence_run_manager.serializers.sequence_run import SequenceRunCountByStatusSerializer
+from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
+from sequence_run_manager.serializers.sequence_run import (
+    SequenceRunCountByStatusSerializer,
+    SequenceRunListParamSerializer,
+)
 
 
 class SequenceStatsViewSet(GenericViewSet):
     """
-    ViewSet for sequence-related statistics
+    ViewSet for sequence-related statistics.
     """
-    @extend_schema(responses=SequenceRunCountByStatusSerializer)
-    @action(detail=False, methods=['GET'])
-    def status_counts(self, request):
-        """Pick up the start_time and end_time from the query params and exclude them from the rest of the query params"""
 
-        start_time = self.request.query_params.get('start_time', 0)
-        end_time = self.request.query_params.get('end_time', 0)
+    def get_queryset(self):
+        """
+        Build sequence queryset using sequence-run list semantics:
+        - keyword filters via `Sequence.objects.get_by_keyword`
+        - optional time filters via sequence `start_time`/`end_time`
+        - optional `library_id` filter
+        - fake sequence runs are excluded (`status__isnull=False`)
+        """
+        start_time = self.request.query_params.get("start_time", "")
+        end_time = self.request.query_params.get("end_time", "")
 
-         # exclude the custom query params from the rest of the query params
-        def exclude_params(params):
-            for param in params:
-                self.request.query_params.pop(param) if param in self.request.query_params.keys() else None
+        library_id = self.request.query_params.get("library_id", "")
 
-        exclude_params([
-            'start_time',
-            'end_time',
-        ])
+        # Custom query params that are not direct Sequence fields for get_by_keyword.
+        exclude_keys = {
+            "start_time",
+            "end_time",
+            "search",
+            "order_by",
+            "library_id",
+        }
+        keyword_params = {
+            key: value
+            for key, value in self.request.query_params.items()
+            if key not in exclude_keys
+        }
 
-        # Start with base queryset
-        qs = Sequence.objects.all()
+        result_set = (
+            Sequence.objects.get_by_keyword(**keyword_params)
+            .distinct()
+            .filter(status__isnull=False)  # filter out fake sequence runs
+        )
 
-        # Apply time range filters if provided
+        if library_id:
+            sequence_ids = (
+                LibraryAssociation.objects.filter(library_id=library_id)
+                .values_list("sequence_id", flat=True)
+            )
+            result_set = result_set.filter(orcabus_id__in=sequence_ids)
+
         if start_time and end_time:
-            qs = qs.filter(
-                Q(start_time__range=[start_time, end_time]) |
-                Q(end_time__range=[start_time, end_time])
+            result_set = result_set.filter(
+                Q(start_time__range=[start_time, end_time])
+                | Q(end_time__range=[start_time, end_time])
             )
 
-        # Get total count
-        total = qs.count()
+        return result_set
 
-        # Get counts by status
-        status_counts = qs.values('status').annotate(count=models.Count('status'))
+    @extend_schema(
+        parameters=[SequenceRunListParamSerializer],
+        responses=SequenceRunCountByStatusSerializer,
+    )
+    @action(detail=False, methods=["GET"])
+    def status_counts(self, request):
+        queryset = self.get_queryset()
+        status_counts = queryset.values("status").annotate(count=models.Count("status"))
 
-        # Convert to dictionary with default 0 for missing statuses
         counts = {
-            'all': total,
-            'started': 0,
-            'succeeded': 0,
-            'aborted': 0,
-            'failed': 0,
-            'resolved': 0,
+            "all": queryset.count(),
+            "started": 0,
+            "succeeded": 0,
+            "failed": 0,
+            "aborted": 0,
+            "resolved": 0,
+            "deprecated": 0,
         }
 
         for item in status_counts:
-            if item['status'] is not None:
-                status = item['status'].lower()
-                counts[status] = item['count']
+            if item["status"] is not None:
+                key = item["status"].lower()
+                if key in counts:
+                    counts[key] = item["count"]
 
-        return Response(counts, status=200)
-
-    # You can add more stats endpoints here in the future
-    # For example:
-
-    # @action(detail=False, methods=['GET'])
-    # def monthly_trends(self, request):
-    #     """Example: Get sequence counts by month"""
-    #     pass
-
-    # @action(detail=False, methods=['GET'])
-    # def instrument_stats(self, request):
-    #     """Example: Get stats grouped by instrument"""
-    #     pass
+        return Response(
+            counts,
+            status=200,
+        )

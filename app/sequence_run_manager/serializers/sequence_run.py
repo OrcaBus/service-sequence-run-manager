@@ -39,6 +39,7 @@ class SequenceRunCountByStatusSerializer(serializers.Serializer):
     failed = serializers.IntegerField()
     aborted = serializers.IntegerField()
     resolved = serializers.IntegerField()
+    deprecated = serializers.IntegerField()
 
 
 class SequenceRunGroupByInstrumentRunIdSerializer(serializers.Serializer):
