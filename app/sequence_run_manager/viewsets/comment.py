@@ -22,9 +22,11 @@ from sequence_run_manager.viewsets.base import get_email_from_bearer_authorizati
         request=CommentUpdateRequestSerializer,
         responses={200: CommentSerializer},
         description=(
-            "Update comment text. Authorization is derived from `Authorization: Bearer <jwt>` (email claim "
-            "must match the comment's original `created_by`). Request accepts `comment` and optional "
-            "`created_by` (empty allowed; ignored for the update)."
+            "Update comment text. Authorization is primarily derived from `Authorization: Bearer <jwt>` (email "
+            "claim must match the comment's original `created_by`). Request accepts `comment` and optional "
+            "`created_by` (empty allowed). Implementations may additionally treat a non-empty `created_by` in "
+            "the request body that matches the stored author as sufficient for authorization when an "
+            "`Authorization` header is not present."
         ),
     ),
     destroy=extend_schema(
@@ -38,7 +40,7 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
     search_fields = Comment.get_base_fields()
     pagination_class = None
     lookup_value_regex = "[^/]+" # to allow id prefix
-    # PatchOnlyViewSet excludes PUT; we extend it with DELETE for soft-delete.
+    # Allow list/create/partial update and soft-delete; PUT is intentionally excluded.
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):

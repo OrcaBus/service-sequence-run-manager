@@ -6,7 +6,8 @@ import json
 
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils.timezone import now, timedelta
+from django.utils.timezone import now
+from datetime import timedelta
 from rest_framework.test import APIClient
 import hashlib
 
