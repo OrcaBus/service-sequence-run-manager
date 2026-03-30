@@ -79,7 +79,7 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         # Handle case when there's no latest state - only allow DEPRECATED
         if not latest_state:
             if request_status != 'DEPRECATED':
-                return Response({"detail": "No state found for workflow run '{}'. Only DEPRECATED is allowed when there are no states.".format(wfr_orcabus_id)},
+                return Response({"detail": "No state found for workflow run '{}'. Only DEPRECATED is allowed when there are no states.".format(sequence_orcabus_id)},
                                 status=status.HTTP_400_BAD_REQUEST)
             latest_status = None
         else:

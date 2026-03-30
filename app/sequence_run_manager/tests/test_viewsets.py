@@ -6,7 +6,7 @@ import json
 
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.utils.timezone import now
+from django.utils.timezone import now, timedelta
 from rest_framework.test import APIClient
 import hashlib
 
@@ -21,6 +21,21 @@ from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def _make_bearer_token(email: str) -> str:
+    """Minimal RS256-shaped JWT (payload only used; signature not verified by the API)."""
+
+    def _b64url(data: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
+
+    return ".".join(
+        [
+            _b64url({"alg": "RS256", "typ": "JWT"}),
+            _b64url({"email": email}),
+            _b64url({"sig": "test"}),
+        ]
+    )
 
 
 class SequenceViewSetTestCase(TestCase):
@@ -63,15 +78,16 @@ class SequenceViewSetTestCase(TestCase):
             comment="TestComment",
             created_by="TestUser",
         )
+        # Explicit ordering so get_latest_state() is deterministic (newest timestamp wins).
         State.objects.create(
             sequence=sequence,
             status="Started",
-            timestamp=now(),
+            timestamp=now() - timedelta(seconds=2),
         )
         State.objects.create(
             sequence=sequence,
             status="Complete",
-            timestamp=now(),
+            timestamp=now() - timedelta(seconds=1),
         )
         LibraryAssociation.objects.create(
             sequence=sequence,
@@ -175,19 +191,67 @@ class SequenceViewSetTestCase(TestCase):
         logger.info("Update sequence comment")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
-        # Note: created_by must match the original creator "TestUser" from setUp
-        # APIClient uses format='json' instead of content_type
+        # Authorisation via body `created_by` matching the stored author (case-insensitive in the view).
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             {
                 "comment": "TestCommentUpdated",
-                "created_by": "TestUser",  # Must match setUp
+                "created_by": "TestUser",
             },
             format='json'
         )
         self.assertEqual(response.status_code, 200, "Ok status response is expected")
         self.assertEqual(response.data["comment"], "TestCommentUpdated", "Comment is expected")
         self.assertEqual(response.data["created_by"], "TestUser", "Created by is expected")
+
+    def test_update_sequence_run_comment_via_bearer_email(self):
+        """
+        PATCH with only `comment`; actor email comes from Authorization Bearer JWT claim.
+        """
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}")
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
+            {"comment": "BearerUpdated"},
+            format="json",
+        )
+        self.client.credentials()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["comment"], "BearerUpdated")
+
+    def test_update_sequence_run_comment_requires_bearer_when_created_by_omitted(self):
+        """Without `created_by` in the body, the view requires a Bearer token with an email claim."""
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
+            {"comment": "NoAuth"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_update_sequence_run_comment_permission_denied_wrong_bearer_email(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('someone.else@example.com')}")
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
+            {"comment": "Hijack"},
+            format="json",
+        )
+        self.client.credentials()
+        self.assertEqual(response.status_code, 403)
+
+    def test_update_sequence_run_comment_permission_denied_wrong_created_by(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
+            {"comment": "Nope", "created_by": "NotTheAuthor"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_delete_sequence_run_comment(self):
         """
@@ -197,17 +261,7 @@ class SequenceViewSetTestCase(TestCase):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
 
-        # Build a minimal JWT-like bearer token. The view decodes payload (email)
-        # without signature verification and compares to comment.created_by.
-        def _b64url(data: dict) -> str:
-            return base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip("=")
-
-        token = ".".join([
-            _b64url({"alg": "RS256", "typ": "JWT"}),
-            _b64url({"email": "TestUser"}),
-            _b64url({"sig": "test"}),
-        ])
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}")
 
         response = self.client.delete(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
@@ -215,6 +269,127 @@ class SequenceViewSetTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 204, "No content status response is expected")
         self.assertEqual(Comment.objects.filter(orcabus_id=comment.orcabus_id, is_deleted=True).count(), 1, "Comment is expected to be deleted")
+        self.client.credentials()
+
+    def test_get_states_transition_validation_map(self):
+        """
+        python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_get_states_transition_validation_map
+        """
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        response = self.client.get(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/get_states_transition_validation_map/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {"RESOLVED": ["FAILED"], "DEPRECATED": ["SUCCEEDED"]},
+        )
+
+    def test_patch_state_comment(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Resolution note"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["comment"], "Resolution note")
+        state.refresh_from_db()
+        self.assertEqual(state.comment, "Resolution note")
+
+    def test_patch_state_requires_comment(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("comment", response.data.get("detail", "").lower())
+
+    def test_create_state_requires_status_and_comment(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "RESOLVED"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_state_invalid_transition(self):
+        """Latest state is Complete (setUp); RESOLVED is only allowed after FAILED."""
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "RESOLVED", "comment": "Cannot from Complete"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_state_resolved_after_failed(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "RESOLVED", "comment": "Handled"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "RESOLVED")
+        self.assertEqual(response.data["comment"], "Handled")
+
+    def test_create_state_deprecated_after_succeeded(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        State.objects.create(
+            sequence=sequence_run,
+            status="SUCCEEDED",
+            timestamp=now(),
+            comment="ok",
+        )
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "DEPRECATED", "comment": "No longer used"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "DEPRECATED")
+
+    def test_create_state_only_deprecated_when_no_prior_states(self):
+        orphan = Sequence.objects.create(
+            instrument_run_id="orphan_run_001",
+            run_volume_name="vol",
+            run_folder_path="/p",
+            run_data_uri="gds://vol/p",
+            status=SequenceStatus.from_seq_run_status("Complete"),
+            start_time=now(),
+            sample_sheet_name="SampleSheet.csv",
+            sequence_run_id="r.ORPHAN01",
+            sequence_run_name="orphan_run_001",
+            api_url="https://bssh.dev/api/v1/runs/r.ORPHAN01",
+            v1pre3_id="1",
+            ica_project_id="12345678-53ba-47a5-854d-e6b53101adb7",
+            experiment_name="Exp",
+        )
+        bad = self.client.post(
+            f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
+            {"status": "RESOLVED", "comment": "x"},
+            format="json",
+        )
+        self.assertEqual(bad.status_code, 400)
+        good = self.client.post(
+            f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
+            {"status": "DEPRECATED", "comment": "initial"},
+            format="json",
+        )
+        self.assertEqual(good.status_code, 201)
+        self.assertEqual(good.data["status"], "DEPRECATED")
 
     @patch('sequence_run_manager.viewsets.sequence_run_action.emit_srm_api_event')
     def test_add_samplesheet_action(self, mock_emit_event):

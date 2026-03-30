@@ -3,9 +3,7 @@ from rest_framework.viewsets import GenericViewSet
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.decorators import action
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from drf_spectacular.types import OpenApiTypes
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.sequence import Sequence
 from sequence_run_manager.serializers.comment import CommentSerializer, CommentCreateRequestSerializer, CommentUpdateRequestSerializer
@@ -41,7 +39,7 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
     pagination_class = None
     lookup_value_regex = "[^/]+" # to allow id prefix
     # PatchOnlyViewSet excludes PUT; we extend it with DELETE for soft-delete.
-    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options', 'trace']
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
         return Comment.objects.filter(
@@ -82,7 +80,7 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
         body.is_valid(raise_exception=True)
         vd = body.validated_data
 
-        if "created_by" in vd:
+        if "created_by" in vd and vd["created_by"] is not None and vd["created_by"] != "":
             actor = vd["created_by"].strip().lower()
         else:
             actor = get_email_from_bearer_authorization(request)

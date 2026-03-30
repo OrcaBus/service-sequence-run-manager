@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from sequence_run_manager.models.sequence import Sequence, SequenceStatus, LibraryAssociation
+from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.serializers.sequence_run import (
     SequenceRunCountByStatusSerializer,
     SequenceRunListParamSerializer,
