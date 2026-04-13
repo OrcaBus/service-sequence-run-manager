@@ -46,12 +46,17 @@ class SequenceRunGroupByInstrumentRunIdSerializer(serializers.Serializer):
     instrument_run_id = serializers.CharField(help_text="The instrument run ID")
     start_time = serializers.DateTimeField(help_text="Earliest start time of sequences in this group")
     end_time = serializers.DateTimeField(help_text="Latest end time of sequences in this group")
+    status = serializers.CharField(
+        help_text="Group status: latest sequence in the group by start_time (then orcabus_id)",
+        required=False,
+        allow_null=True,
+    )
     count = serializers.IntegerField(help_text="Number of sequences in this group")
     items = SequenceRunMinSerializer(many=True)
 
     class Meta(OrcabusIdSerializerMetaMixin):
         model = Sequence
-        fields = ["instrument_run_id", "start_time", "end_time", "count", "items"]
+        fields = ["instrument_run_id", "start_time", "end_time", "status", "count", "items"]
 
     def get_schema(self):
         """

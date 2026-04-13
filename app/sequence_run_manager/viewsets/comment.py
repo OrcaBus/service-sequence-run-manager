@@ -7,7 +7,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.sequence import Sequence
 from sequence_run_manager.serializers.comment import CommentSerializer, CommentCreateRequestSerializer, CommentUpdateRequestSerializer
-from sequence_run_manager.viewsets.base import get_email_from_bearer_authorization
+from sequence_run_manager.viewsets.utils import get_email_from_bearer_authorization
 
 
 @extend_schema_view(

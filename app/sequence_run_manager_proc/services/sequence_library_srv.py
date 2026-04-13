@@ -267,7 +267,7 @@ def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):
 #         query_param_string = f'&{field_name}='.join(array_to_process)
 #         query_param_string = f'?{field_name}=' + query_param_string  # Appending name at the beginning
 
-#         query_param_string = query_param_string + f'&rowsPerPage=1000'  # Add Rows per page (1000 is the maximum rows)
+#         query_param_string = query_param_string + f'&rows_per_page=1000'  # Add rows per page (1000 is the maximum rows)
 
 #         url = f"https://{METADATA_DOMAIN_NAME.strip('.')}/{METADATA_API_PATH.strip('/')}/{query_param_string}"
 #         # Make sure no data is left, looping data until the end

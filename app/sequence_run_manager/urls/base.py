@@ -19,7 +19,7 @@ router = OptionalSlashDefaultRouter()
 router.register(r"sequence_run", SequenceRunViewSet, basename="sequence-run")
 router.register("sequence_run/(?P<orcabus_id>[^/]+)/comment", CommentViewSet, basename="sequence-run-comment")
 router.register("sequence_run/(?P<orcabus_id>[^/]+)/state", StateViewSet, basename="sequence-run-states")
-router.register(r"sequence_run/stats", SequenceStatsViewSet, basename="sequence-run-stats")
+router.register(r"stats", SequenceStatsViewSet, basename="stats")
 router.register(r"sample_sheet", SampleSheetViewSet, basename="sample-sheet")
 
 # Sequence Run Action
