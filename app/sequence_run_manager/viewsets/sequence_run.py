@@ -98,7 +98,7 @@ class SequenceRunViewSet(BaseViewSet):
         if order_by:
             result_set = result_set.order_by(order_by)
 
-        return result_set.distinct()
+        return result_set
 
     @extend_schema(responses={200: SequenceRunSerializer, 404: OpenApiResponse(description="Sequence run not found.")}, operation_id="get_sequence_run_by_orcabus_id")
     def retrieve(self, request, *args, **kwargs):

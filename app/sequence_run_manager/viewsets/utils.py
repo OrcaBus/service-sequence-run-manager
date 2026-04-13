@@ -103,17 +103,33 @@ def parse_datetime_safe(value: Optional[str]) -> Optional[datetime]:
 
 
 def build_keyword_params(query_params) -> dict[str, list[str]]:
-    """Use getlist so multiple values per key are preserved (e.g. repeated workflow ids)."""
-    return {
-        k: query_params.getlist(k)
-        for k in query_params
-        if k not in SEQUENCE_RUN_NON_KEYWORD_QUERY_PARAMS and query_params.getlist(k)
-    }
+    """
+    Build keyword args for ``get_by_keyword`` / ``get_model_fields_query``.
+
+    Uses ``getlist`` so repeated keys stay as multiple values (e.g. several workflow ids).
+    Each value is stripped; blanks are dropped. A key is omitted entirely if every value
+    is blank, so we never apply ``field__iexact=''`` from params like ``?workflow_id=``.
+    """
+    out: dict[str, list[str]] = {}
+    for k in query_params:
+        if k in SEQUENCE_RUN_NON_KEYWORD_QUERY_PARAMS:
+            continue
+        raw = query_params.getlist(k)
+        if not raw:
+            continue
+        values: list[str] = []
+        for v in raw:
+            s = v.strip() if isinstance(v, str) else str(v).strip()
+            if s:
+                values.append(s)
+        if values:
+            out[k] = values
+    return out
 
 
 def _sequence_run_search_q(term: str) -> Q:
     """
-    Search query for sequence run search, iexact search on orcabus_id, instrument_run_id, sequence_run_id, sequence_run_name, experiment_name, and sample_sheet_name
+    Search query for sequence runs using a case-insensitive substring match on orcabus_id, instrument_run_id, sequence_run_id, sequence_run_name, experiment_name, and sample_sheet_name
     """
     return (
         Q(orcabus_id__icontains=term)
