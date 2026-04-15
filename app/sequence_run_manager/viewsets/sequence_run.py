@@ -29,6 +29,21 @@ ALLOWED_ORDER_FIELDS = frozenset([
     'status', '-status',
 ])
 
+# Mapping from per-sequence ordering fields to the annotated fields used in the
+# instrument-run grouped queryset.  Fields absent here (e.g. ``orcabus_id``) are
+# not in the grouped result and are intentionally omitted so ordering falls back
+# to the default ``-start_time``.
+_GROUP_ORDER_MAP = {
+    "status": "group_status",
+    "-status": "-group_status",
+    "start_time": "start_time",
+    "-start_time": "-start_time",
+    "end_time": "end_time",
+    "-end_time": "-end_time",
+    "instrument_run_id": "instrument_run_id",
+    "-instrument_run_id": "-instrument_run_id",
+}
+
 
 class SequenceRunViewSet(BaseViewSet):
     serializer_class = SequenceRunSerializer
@@ -126,16 +141,6 @@ class SequenceRunViewSet(BaseViewSet):
         # Apply ordering to grouped_data; ``status`` maps to the annotated ``group_status``
         # field.  Fields absent from the grouped queryset (e.g. ``orcabus_id``) are ignored
         # and the default ``-start_time`` ordering is kept.
-        _GROUP_ORDER_MAP = {
-            "status": "group_status",
-            "-status": "-group_status",
-            "start_time": "start_time",
-            "-start_time": "-start_time",
-            "end_time": "end_time",
-            "-end_time": "-end_time",
-            "instrument_run_id": "instrument_run_id",
-            "-instrument_run_id": "-instrument_run_id",
-        }
         if validated_ordering and validated_ordering in _GROUP_ORDER_MAP:
             grouped_data = grouped_data.order_by(_GROUP_ORDER_MAP[validated_ordering])
 
