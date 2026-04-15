@@ -11,13 +11,15 @@ from typing import Any, Optional
 import jwt
 from django.db.models import Count, Max, Min, OuterRef, Q, QuerySet, Subquery
 from django.utils.dateparse import parse_datetime
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.settings import api_settings
 
 from sequence_run_manager.pagination import PaginationConstant
-from sequence_run_manager.models import Sequence, LibraryAssociation
+from sequence_run_manager.models import Sequence, SequenceStatus, LibraryAssociation
 
 logger = logging.getLogger(__name__)
+
+SEQUENCE_STATUS_QUERY_VALUES = frozenset(member.value for member in SequenceStatus)
 
 
 # --- Bearer / JWT (used by comment and similar viewsets) ---
@@ -85,9 +87,8 @@ SEQUENCE_RUN_NON_KEYWORD_QUERY_PARAMS = frozenset(
         "end_time",
         "library_id",
         "status",
-        "search",
-        "order_by",
         api_settings.ORDERING_PARAM,
+        api_settings.SEARCH_PARAM,
         PaginationConstant.PAGE,
         PaginationConstant.ROWS_PER_PAGE,
         "sortCol",
@@ -150,11 +151,18 @@ def filtered_sequence_runs_queryset(
     Keyword filters, exclude fake runs (``status`` null), optional ``start_time`` / ``end_time``
     (parsed datetimes, applied to ``Sequence.start_time`` as gte/lte), ``library_id``,
     optional ``status`` on ``Sequence.status`` (only when ``apply_sequence_status_param`` is True),
-    and free-text ``search`` (DRF search param name).
+    and free-text search using ``api_settings.SEARCH_PARAM`` (default ``search``).
 
     For ``list_by_instrument_run_id`` / instrument-run stats, pass
     ``apply_sequence_status_param=False`` so ``status`` filters the **group** status instead.
+
+    Raises:
+        ValidationError: If ``status`` is present and non-blank but not a ``SequenceStatus`` value.
     """
+    status_filter = query_params.get("status", "")
+    if status_filter and status_filter not in SEQUENCE_STATUS_QUERY_VALUES:
+        raise ValidationError(f"Invalid status value: {status_filter}")
+
     keyword_params = build_keyword_params(query_params)
     qs = (
         Sequence.objects.get_by_keyword(**keyword_params)
@@ -179,7 +187,6 @@ def filtered_sequence_runs_queryset(
         qs = qs.filter(orcabus_id__in=sequence_ids)
 
     if apply_sequence_status_param:
-        status_filter = query_params.get("status", "")
         if status_filter:
             qs = qs.filter(status=status_filter)
 

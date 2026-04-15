@@ -9,7 +9,12 @@ from sequence_run_manager.pagination import StandardResultsSetPagination
 from django.shortcuts import get_object_or_404
 
 from sequence_run_manager.models import Sequence
-from sequence_run_manager.serializers.sequence_run import SequenceRunSerializer, SequenceRunListParamSerializer, SequenceRunMinSerializer, SequenceRunGroupByInstrumentRunIdSerializer
+from sequence_run_manager.serializers.sequence_run import (
+    SequenceRunSerializer,
+    SequenceRunListQueryParamSerializer,
+    SequenceRunMinSerializer,
+    SequenceRunGroupByInstrumentRunIdSerializer,
+)
 from sequence_run_manager.serializers.sample_sheet import SampleSheetSerializer
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.viewsets.base import BaseViewSet
@@ -31,7 +36,7 @@ class SequenceRunViewSet(BaseViewSet):
     search_fields = Sequence.get_base_fields()
     # Search is applied in ``get_queryset`` via ``sequence_run_manager.viewsets.utils.filtered_sequence_runs_queryset`` (same
     # text match as stats / ``list_by_instrument_run_id``). Omit ``SearchFilter`` to avoid
-    # double-filtering on the same ``search`` query param.
+    # double-filtering on the same ``SEARCH_PARAM`` query key.
     filter_backends = [filters.OrderingFilter]
     queryset = Sequence.objects.all()
     lookup_value_regex = "[^/]+" # to allow id prefix
@@ -55,7 +60,7 @@ class SequenceRunViewSet(BaseViewSet):
     def filter_queryset(self, queryset):
         """
         Override to prevent OrderingFilter from applying default ordering
-        when we have a custom order_by parameter.
+        when we have a validated ``ordering`` query param (``REST_FRAMEWORK['ORDERING_PARAM']``).
         """
         # Check if we have custom ordering (stored in instance variable from get_queryset)
         if self._has_custom_ordering:
@@ -80,23 +85,19 @@ class SequenceRunViewSet(BaseViewSet):
         """
         Same shared filters as ``list_by_instrument_run_id`` and ``stats/sequence_run_status_counts`` (see
         ``sequence_run_manager.viewsets.utils.filtered_sequence_runs_queryset``). The ``status``
-        query param filters ``Sequence.status`` on each row. Optional ``order_by`` / ``ordering``
-        when the value is in the allow-list.
+        query param filters ``Sequence.status`` on each row. Optional ``ordering``
+        (``REST_FRAMEWORK['ORDERING_PARAM']``) when the value is in the allow-list.
         """
-        raw_order = (
-            self.request.query_params.get("order_by")
-            or self.request.query_params.get(api_settings.ORDERING_PARAM)
-            or ""
-        ).strip()
-        order_by = self._validate_ordering(raw_order)
-        self._has_custom_ordering = order_by is not None
+        raw_order = (self.request.query_params.get(api_settings.ORDERING_PARAM) or "").strip()
+        validated_ordering = self._validate_ordering(raw_order)
+        self._has_custom_ordering = validated_ordering is not None
 
         result_set = filtered_sequence_runs_queryset(
             self.request.query_params,
             apply_sequence_status_param=True,
         )
-        if order_by:
-            result_set = result_set.order_by(order_by)
+        if validated_ordering:
+            result_set = result_set.order_by(validated_ordering)
 
         return result_set
 
@@ -114,7 +115,7 @@ class SequenceRunViewSet(BaseViewSet):
 
     @extend_schema(
         parameters=[
-            SequenceRunListParamSerializer
+            SequenceRunListQueryParamSerializer
         ],
         responses={
             200: SequenceRunMinSerializer(many=True)
@@ -126,7 +127,7 @@ class SequenceRunViewSet(BaseViewSet):
 
     @extend_schema(
         parameters=[
-            SequenceRunListParamSerializer
+            SequenceRunListQueryParamSerializer
         ],
         responses={
             200: SequenceRunGroupByInstrumentRunIdSerializer(many=True)
@@ -141,19 +142,15 @@ class SequenceRunViewSet(BaseViewSet):
         sequence in the group (by ``start_time``, then ``orcabus_id``), not each row's field alone.
         Other params match the list endpoint (see ``filtered_sequence_runs_queryset``).
         """
-        raw_order = (
-            self.request.query_params.get("order_by")
-            or self.request.query_params.get(api_settings.ORDERING_PARAM)
-            or ""
-        ).strip()
-        order_by = self._validate_ordering(raw_order)
+        raw_order = (self.request.query_params.get(api_settings.ORDERING_PARAM) or "").strip()
+        validated_ordering = self._validate_ordering(raw_order)
 
         sequence_set = filtered_sequence_runs_queryset(
             self.request.query_params,
             apply_sequence_status_param=False,
         )
-        if order_by:
-            sequence_set = sequence_set.order_by(order_by)
+        if validated_ordering:
+            sequence_set = sequence_set.order_by(validated_ordering)
 
         grouped_data = instrument_run_groups_queryset(sequence_set)
         status_filter = self.request.query_params.get("status", "").strip()

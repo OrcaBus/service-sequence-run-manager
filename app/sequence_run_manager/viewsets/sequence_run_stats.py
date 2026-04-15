@@ -10,7 +10,7 @@ from sequence_run_manager.viewsets.utils import (
 )
 from sequence_run_manager.serializers.sequence_run import (
     SequenceRunCountByStatusSerializer,
-    SequenceRunListParamSerializer,
+    SequenceRunListQueryParamSerializer,
 )
 
 
@@ -32,7 +32,7 @@ class SequenceStatsViewSet(GenericViewSet):
         )
 
     @extend_schema(
-        parameters=[SequenceRunListParamSerializer],
+        parameters=[SequenceRunListQueryParamSerializer],
         responses=SequenceRunCountByStatusSerializer,
         operation_id="stats_sequence_run_status_counts",
     )
@@ -63,7 +63,7 @@ class SequenceStatsViewSet(GenericViewSet):
         )
 
     @extend_schema(
-        parameters=[SequenceRunListParamSerializer],
+        parameters=[SequenceRunListQueryParamSerializer],
         responses=SequenceRunCountByStatusSerializer,
         operation_id="stats_instrument_run_status_counts",
     )
