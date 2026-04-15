@@ -159,7 +159,7 @@ def filtered_sequence_runs_queryset(
     Raises:
         ValidationError: If ``status`` is present and non-blank but not a ``SequenceStatus`` value.
     """
-    status_filter = query_params.get("status", "")
+    status_filter = (query_params.get("status") or "").strip()
     if status_filter and status_filter not in SEQUENCE_STATUS_QUERY_VALUES:
         raise ValidationError(f"Invalid status value: {status_filter}")
 

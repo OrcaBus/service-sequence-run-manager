@@ -2,7 +2,6 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework import filters
 from rest_framework.settings import api_settings
 
 from sequence_run_manager.pagination import StandardResultsSetPagination
@@ -34,17 +33,13 @@ ALLOWED_ORDER_FIELDS = frozenset([
 class SequenceRunViewSet(BaseViewSet):
     serializer_class = SequenceRunSerializer
     search_fields = Sequence.get_base_fields()
-    # Search is applied in ``get_queryset`` via ``sequence_run_manager.viewsets.utils.filtered_sequence_runs_queryset`` (same
-    # text match as stats / ``list_by_instrument_run_id``). Omit ``SearchFilter`` to avoid
-    # double-filtering on the same ``SEARCH_PARAM`` query key.
-    filter_backends = [filters.OrderingFilter]
+    # Ordering is handled exclusively in ``get_queryset`` using the allow-list below.
+    # SearchFilter is also omitted because ``filtered_sequence_runs_queryset`` applies
+    # the same free-text search; having both would double-filter on the same key.
+    filter_backends = []
     queryset = Sequence.objects.all()
     lookup_value_regex = "[^/]+" # to allow id prefix
     lookup_field = 'orcabus_id'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._has_custom_ordering = False
 
     @staticmethod
     def _validate_ordering(ordering: str | None) -> str | None:
@@ -56,50 +51,23 @@ class SequenceRunViewSet(BaseViewSet):
             return None
         return s
 
-
-    def filter_queryset(self, queryset):
-        """
-        Override to prevent OrderingFilter from applying default ordering
-        when we have a validated ``ordering`` query param (``REST_FRAMEWORK['ORDERING_PARAM']``).
-        """
-        # Check if we have custom ordering (stored in instance variable from get_queryset)
-        if self._has_custom_ordering:
-            # We have custom ordering, so we need to prevent OrderingFilter from applying default ordering
-            # Temporarily store original filter_backends
-            original_backends = self.filter_backends
-            # Filter out OrderingFilter by checking the class type
-            self.filter_backends = [f for f in self.filter_backends if f != filters.OrderingFilter]
-            try:
-                # Apply filters without OrderingFilter
-                queryset = super().filter_queryset(queryset)
-            finally:
-                # Restore original filter_backends
-                self.filter_backends = original_backends
-        else:
-            # No custom ordering, use default behavior
-            queryset = super().filter_queryset(queryset)
-
-        return queryset
-
     def get_queryset(self):
         """
         Same shared filters as ``list_by_instrument_run_id`` and ``stats/sequence_run_status_counts`` (see
         ``sequence_run_manager.viewsets.utils.filtered_sequence_runs_queryset``). The ``status``
         query param filters ``Sequence.status`` on each row. Optional ``ordering``
-        (``REST_FRAMEWORK['ORDERING_PARAM']``) when the value is in the allow-list.
+        (``REST_FRAMEWORK['ORDERING_PARAM']``) when the value is in the allow-list; falls back
+        to the default ``BaseViewSet.ordering`` when absent or invalid.
         """
         raw_order = (self.request.query_params.get(api_settings.ORDERING_PARAM) or "").strip()
         validated_ordering = self._validate_ordering(raw_order)
-        self._has_custom_ordering = validated_ordering is not None
 
         result_set = filtered_sequence_runs_queryset(
             self.request.query_params,
             apply_sequence_status_param=True,
         )
-        if validated_ordering:
-            result_set = result_set.order_by(validated_ordering)
-
-        return result_set
+        ordering = validated_ordering if validated_ordering else self.ordering[0]
+        return result_set.order_by(ordering)
 
     @extend_schema(responses={200: SequenceRunSerializer, 404: OpenApiResponse(description="Sequence run not found.")}, operation_id="get_sequence_run_by_orcabus_id")
     def retrieve(self, request, *args, **kwargs):
@@ -149,13 +117,27 @@ class SequenceRunViewSet(BaseViewSet):
             self.request.query_params,
             apply_sequence_status_param=False,
         )
-        if validated_ordering:
-            sequence_set = sequence_set.order_by(validated_ordering)
 
         grouped_data = instrument_run_groups_queryset(sequence_set)
-        status_filter = self.request.query_params.get("status", "").strip()
+        status_filter = (self.request.query_params.get("status") or "").strip()
         if status_filter:
             grouped_data = grouped_data.filter(group_status=status_filter)
+
+        # Apply ordering to grouped_data; ``status`` maps to the annotated ``group_status``
+        # field.  Fields absent from the grouped queryset (e.g. ``orcabus_id``) are ignored
+        # and the default ``-start_time`` ordering is kept.
+        _GROUP_ORDER_MAP = {
+            "status": "group_status",
+            "-status": "-group_status",
+            "start_time": "start_time",
+            "-start_time": "-start_time",
+            "end_time": "end_time",
+            "-end_time": "-end_time",
+            "instrument_run_id": "instrument_run_id",
+            "-instrument_run_id": "-instrument_run_id",
+        }
+        if validated_ordering and validated_ordering in _GROUP_ORDER_MAP:
+            grouped_data = grouped_data.order_by(_GROUP_ORDER_MAP[validated_ordering])
 
         paginator = StandardResultsSetPagination()
         paginated_groups = paginator.paginate_queryset(grouped_data, request)
