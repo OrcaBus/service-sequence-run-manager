@@ -43,6 +43,12 @@ class SequenceViewSetTestCase(TestCase):
     sequence_run_endpoint = f"/{api_base}sequence_run"
     sequence_endpoint = f"/{api_base}sequence"
     sample_sheet_endpoint = f"/{api_base}sample_sheet"
+    stats_sequence_run_status_counts_endpoint = (
+        f"/{api_base}stats/sequence_run_status_counts"
+    )
+    stats_instrument_run_status_counts_endpoint = (
+        f"/{api_base}stats/instrument_run_status_counts"
+    )
 
     def setUp(self):
         # Use DRF's APIClient for better compatibility with DRF viewsets
@@ -103,6 +109,112 @@ class SequenceViewSetTestCase(TestCase):
         Comment.objects.all().delete()
         State.objects.all().delete()
         LibraryAssociation.objects.all().delete()
+
+    def test_list_status_filters_sequence_row_group_status_filters_latest_in_group(self):
+        """
+        ``GET /sequence_run/?status=`` filters ``Sequence.status`` per row.
+        ``list_by_instrument_run_id`` uses ``status`` against the group's latest-by-start_time status.
+        """
+        instrument_run_id = "190101_A01052_0001_BH5LY7ACGT"
+        Sequence.objects.create(
+            instrument_run_id=instrument_run_id,
+            run_volume_name="gds_name",
+            run_folder_path="/to/gds/folder/path",
+            run_data_uri="gds://gds_name/to/gds/folder/path",
+            status=SequenceStatus.STARTED,
+            start_time=now() - timedelta(days=1),
+            sample_sheet_name="SampleSheet.csv",
+            sequence_run_id="r.OLDER",
+            sequence_run_name=instrument_run_id,
+            api_url="https://bssh.dev/api/v1/runs/r.OLDER",
+            v1pre3_id="1234567890",
+            ica_project_id="12345678-53ba-47a5-854d-e6b53101adb7",
+            experiment_name="ExperimentName",
+        )
+
+        list_started = self.client.get(f"{self.sequence_run_endpoint}/?status=STARTED")
+        self.assertEqual(list_started.status_code, 200)
+        self.assertEqual(len(list_started.data["results"]), 1)
+        self.assertEqual(list_started.data["results"][0]["sequence_run_id"], "r.OLDER")
+
+        grouped = self.client.get(
+            f"{self.sequence_run_endpoint}/list_by_instrument_run_id/?status=STARTED"
+        )
+        self.assertEqual(grouped.status_code, 200)
+        self.assertEqual(len(grouped.data.get("results", [])), 0)
+
+        grouped_succ = self.client.get(
+            f"{self.sequence_run_endpoint}/list_by_instrument_run_id/?status=SUCCEEDED"
+        )
+        self.assertEqual(grouped_succ.status_code, 200)
+        self.assertEqual(len(grouped_succ.data.get("results", [])), 1)
+        self.assertEqual(grouped_succ.data["results"][0]["status"], "SUCCEEDED")
+
+    def test_stats_sequence_run_status_counts_endpoint(self):
+        """Smoke: per-sequence status totals under ``/stats/sequence_run_status_counts/``."""
+        r = self.client.get(self.stats_sequence_run_status_counts_endpoint)
+        self.assertEqual(r.status_code, 200)
+        self.assertGreaterEqual(r.data.get("all", 0), 1)
+
+    def test_instrument_run_status_counts_endpoint(self):
+        r = self.client.get(self.stats_instrument_run_status_counts_endpoint)
+        self.assertEqual(r.status_code, 200)
+        self.assertGreaterEqual(r.data.get("all", 0), 1)
+
+    def test_instrument_run_status_counts_one_per_group(self):
+        """
+        Regression: ``succeeded`` (etc.) must count **instrument runs**, not sequence rows.
+        One group with two sequences and latest status SUCCEEDED must contribute 1 to succeeded.
+        """
+        Sequence.objects.all().delete()
+        ir = "MULTI_SEQ_SAME_INSTR"
+        base = dict(
+            run_volume_name="gds",
+            run_folder_path="/p",
+            run_data_uri="gds://gds/p",
+            sample_sheet_name="SampleSheet.csv",
+            instrument_run_id=ir,
+            api_url="https://bssh.dev/api/v1/runs/x",
+            v1pre3_id="1",
+            ica_project_id="12345678-53ba-47a5-854d-e6b53101adb7",
+            experiment_name="Exp",
+        )
+        Sequence.objects.create(
+            **base,
+            status=SequenceStatus.FAILED,
+            start_time=now() - timedelta(hours=2),
+            sequence_run_id="r.failmulti",
+            sequence_run_name=ir,
+        )
+        Sequence.objects.create(
+            **base,
+            status=SequenceStatus.SUCCEEDED,
+            start_time=now() - timedelta(hours=1),
+            sequence_run_id="r.succmulti",
+            sequence_run_name=ir,
+        )
+        r = self.client.get(self.stats_instrument_run_status_counts_endpoint)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.data.get("all"), 1)
+        self.assertEqual(r.data.get("succeeded"), 1)
+        self.assertEqual(r.data.get("failed"), 0)
+
+    def test_stats_sequence_run_status_counts_matches_list_start_time_filter(self):
+        """
+        ``sequence_run_status_counts`` must apply the same ``start_time`` (gte) semantics as the list API
+        when only ``start_time`` is provided (not both bounds).
+        """
+        empty = self.client.get(
+            f"{self.stats_sequence_run_status_counts_endpoint}?start_time=2099-01-01T00:00:00%2B00:00"
+        )
+        self.assertEqual(empty.status_code, 200)
+        self.assertEqual(empty.data.get("all"), 0)
+
+        hit = self.client.get(
+            f"{self.stats_sequence_run_status_counts_endpoint}?start_time=2020-01-01T00:00:00%2B00:00"
+        )
+        self.assertEqual(hit.status_code, 200)
+        self.assertGreaterEqual(hit.data.get("all", 0), 1)
 
     def test_get_sequence_runs(self):
         """
