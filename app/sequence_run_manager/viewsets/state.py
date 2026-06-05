@@ -138,8 +138,10 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
         check if the state status is valid:
         states_transition_validation_map[request_state] in current_state.status
         """
-        if request_status not in self.states_transition_validation_map:
+        request_status_upper = request_status.upper()
+        current_status_upper = current_status.upper()
+        if request_status_upper not in self.states_transition_validation_map:
             return False
-        if current_status not in self.states_transition_validation_map[request_status]:
+        if current_status_upper not in self.states_transition_validation_map[request_status_upper]:
             return False
         return True
