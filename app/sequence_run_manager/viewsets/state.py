@@ -1,12 +1,17 @@
+import logging
+
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.viewsets import GenericViewSet
 from rest_framework import mixins, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.db import transaction
 from django.utils import timezone
 from sequence_run_manager.models import State, Sequence
 from sequence_run_manager.serializers.state import StateSerializer, StateCreateRequestSerializer, StateUpdateRequestSerializer
+
+logger = logging.getLogger(__name__)
 
 @extend_schema_view(
     create=extend_schema(
@@ -88,22 +93,23 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
             if not self._validate_state_status(latest_status, request_status):
                 return Response({"detail": "Invalid state request. Can't add state '{}' to '{}'".format(request_status, latest_status)},
                                 status=status.HTTP_400_BAD_REQUEST)
-        # create state
+        # create state and sync sequence status atomically
         try:
-            instance = State.objects.create(
-                sequence=sequence,
-                status=request_status,
-                timestamp=timezone.now(),
-                comment=request_comment,
-            )
-        except Exception as e:
-            return Response({"detail": "Failed to create state. Error: {}".format(str(e))},
+            with transaction.atomic():
+                instance = State.objects.create(
+                    sequence=sequence,
+                    status=request_status,
+                    timestamp=timezone.now(),
+                    comment=request_comment,
+                )
+                # update sequence status if the new state is in states_transition_validation_map
+                if request_status in self.states_transition_validation_map:
+                    sequence.status = request_status
+                    sequence.save(update_fields=["status"])
+        except Exception:
+            logger.exception("Failed to create state for sequence %s", sequence_orcabus_id)
+            return Response({"detail": "Failed to create state. Please try again later."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        # update sequence status if the new state is in states_transition_validation_map
-        if request_status in self.states_transition_validation_map:
-            sequence.status = request_status
-            sequence.save(update_fields=["status"])
 
         data = StateSerializer(instance).data
         headers = self.get_success_headers(data)
