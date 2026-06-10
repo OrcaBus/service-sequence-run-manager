@@ -457,6 +457,8 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "RESOLVED")
         self.assertEqual(response.data["comment"], "Handled")
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, "RESOLVED", "Sequence status should be updated to RESOLVED")
 
     def test_create_state_deprecated_after_succeeded(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -473,6 +475,8 @@ class SequenceViewSetTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "DEPRECATED")
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, "DEPRECATED", "Sequence status should be updated to DEPRECATED")
 
     def test_create_state_only_deprecated_when_no_prior_states(self):
         orphan = Sequence.objects.create(

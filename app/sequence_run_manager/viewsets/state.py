@@ -88,13 +88,22 @@ class StateViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.List
             if not self._validate_state_status(latest_status, request_status):
                 return Response({"detail": "Invalid state request. Can't add state '{}' to '{}'".format(request_status, latest_status)},
                                 status=status.HTTP_400_BAD_REQUEST)
+        # create state
+        try:
+            instance = State.objects.create(
+                sequence=sequence,
+                status=request_status,
+                timestamp=timezone.now(),
+                comment=request_comment,
+            )
+        except Exception as e:
+            return Response({"detail": "Failed to create state. Error: {}".format(str(e))},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        instance = State.objects.create(
-            sequence=sequence,
-            status=request_status,
-            timestamp=timezone.now(),
-            comment=request_comment,
-        )
+        # update sequence status if the new state is in states_transition_validation_map
+        if request_status in self.states_transition_validation_map:
+            sequence.status = request_status
+            sequence.save(update_fields=["status"])
 
         data = StateSerializer(instance).data
         headers = self.get_success_headers(data)
