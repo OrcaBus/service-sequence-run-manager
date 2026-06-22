@@ -20,6 +20,16 @@ export class StatelessStack extends cdk.Stack {
       },
       pipelineName: 'OrcaBus-StatelessSequnceRunManager',
       cdkSynthCmd: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm cdk synth'],
+      synthBuildSpec: {
+        phases: {
+          install: {
+            'runtime-versions': {
+              nodejs: '24.x',
+            },
+          },
+        },
+        version: '0.2',
+      },
       unitAppTestConfig: {
         command: ['cd app', 'make install', 'make test'],
         partialBuildSpec: {
@@ -27,6 +37,7 @@ export class StatelessStack extends cdk.Stack {
             install: {
               'runtime-versions': {
                 python: '3.12',
+                nodejs: '24.x',
               },
             },
           },
