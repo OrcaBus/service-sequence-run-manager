@@ -1,10 +1,15 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from sequence_run_manager_proc.domain.events.srllc import SequenceRunLibraryLinkingChange, AWSEvent
+from sequence_run_manager_proc.domain.events.srllc import (
+    SequenceRunLibraryLinkingChange,
+    AWSEvent,
+)
 from django.utils import timezone
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 @dataclass
 class LibraryLinkingDomain:
@@ -41,7 +46,7 @@ class LibraryLinkingDomain:
         )
 
     def to_put_events_request_entry(
-            self, event_bus_name: str, trace_header: str = ""
+        self, event_bus_name: str, trace_header: str = ""
     ) -> dict:
         """Convert Domain event with envelope to Entry dict struct of PutEvent API"""
         domain_event_with_envelope = self.to_event_with_envelope()

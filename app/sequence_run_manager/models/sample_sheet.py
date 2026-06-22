@@ -10,10 +10,12 @@ class SampleSheetManager(OrcaBusBaseManager):
 
 
 class SampleSheet(OrcaBusBaseModel):
-    orcabus_id = OrcaBusIdField(primary_key=True, prefix='ss')
+    orcabus_id = OrcaBusIdField(primary_key=True, prefix="ss")
     sequence = models.ForeignKey(Sequence, on_delete=models.CASCADE)
     sample_sheet_name = models.CharField(max_length=255, null=False, blank=False)
-    association_status = models.CharField(max_length=255, null=False, blank=False, default='active')
+    association_status = models.CharField(
+        max_length=255, null=False, blank=False, default="active"
+    )
     association_timestamp = models.DateTimeField(auto_now_add=True)
     # JSONB field for sample sheet content
     sample_sheet_content = models.JSONField(null=True, blank=True)

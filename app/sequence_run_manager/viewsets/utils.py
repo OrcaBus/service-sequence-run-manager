@@ -25,7 +25,9 @@ SEQUENCE_STATUS_QUERY_VALUES = frozenset(member.value for member in SequenceStat
 # --- Bearer / JWT (used by comment and similar viewsets) ---
 
 
-def parse_bearer_raw_token_from_request(request, keyword: str = "Bearer") -> Optional[str]:
+def parse_bearer_raw_token_from_request(
+    request, keyword: str = "Bearer"
+) -> Optional[str]:
     """
     Extract the JWT string from ``Authorization: Bearer <token>``.
 
@@ -181,9 +183,9 @@ def filtered_sequence_runs_queryset(
 
     library_id = query_params.get("library_id")
     if library_id:
-        sequence_ids = LibraryAssociation.objects.filter(library_id=library_id).values_list(
-            "sequence_id", flat=True
-        )
+        sequence_ids = LibraryAssociation.objects.filter(
+            library_id=library_id
+        ).values_list("sequence_id", flat=True)
         qs = qs.filter(orcabus_id__in=sequence_ids)
 
     if apply_sequence_status_param:

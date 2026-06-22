@@ -4,7 +4,10 @@ from datetime import datetime
 from sequence_run_manager.tests.factories import SequenceFactory
 from sequence_run_manager_proc.domain.sequence import SequenceDomain
 
-from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange, AWSEvent
+from sequence_run_manager_proc.domain.events.srsc import (
+    SequenceRunStateChange,
+    AWSEvent,
+)
 from sequence_run_manager_proc.tests.case import SequenceRunProcUnitTestCase, logger
 
 

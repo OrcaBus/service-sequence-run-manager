@@ -29,6 +29,7 @@ example event:
     }
 """
 
+
 class LibraryLinkingEventUnitTests(SequenceRunProcUnitTestCase):
     def setUp(self) -> None:
         super(LibraryLinkingEventUnitTests, self).setUp()
@@ -37,11 +38,19 @@ class LibraryLinkingEventUnitTests(SequenceRunProcUnitTestCase):
         super(LibraryLinkingEventUnitTests, self).tearDown()
 
     def test_event_handler(self):
-        mock_samplesheet_event_message = SequenceRunManagerProcFactory.mock_sample_sheet_change_event_message()
+        mock_samplesheet_event_message = (
+            SequenceRunManagerProcFactory.mock_sample_sheet_change_event_message()
+        )
         _ = samplesheet_event.event_handler(mock_samplesheet_event_message, None)
 
         #  create ghost sequence record
-        seq = Sequence.objects.filter(instrument_run_id=TestConstant.instrument_run_id.value).exclude(sequence_run_id=TestConstant.sequence_run_id.value).first()
+        seq = (
+            Sequence.objects.filter(
+                instrument_run_id=TestConstant.instrument_run_id.value
+            )
+            .exclude(sequence_run_id=TestConstant.sequence_run_id.value)
+            .first()
+        )
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertIsNotNone(seq)
 
@@ -50,7 +59,11 @@ class LibraryLinkingEventUnitTests(SequenceRunProcUnitTestCase):
         self.assertEqual(2, qs_libraries.count())
 
         #  create library linking event
-        mock_library_linking_event_message = SequenceRunManagerProcFactory.mock_library_linking_change_event_message(seq.sequence_run_id)
+        mock_library_linking_event_message = (
+            SequenceRunManagerProcFactory.mock_library_linking_change_event_message(
+                seq.sequence_run_id
+            )
+        )
         _ = librarylinking_event.event_handler(mock_library_linking_event_message, None)
 
         qs_libraries = LibraryAssociation.objects.filter(sequence=seq)

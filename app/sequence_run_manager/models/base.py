@@ -26,9 +26,9 @@ from sequence_run_manager.pagination import PaginationConstant
 logger = logging.getLogger(__name__)
 
 orcabus_id_validator = RegexValidator(
-    regex=r'^[\w]{26}$',
-    message='ULID is expected to be 26 characters long',
-    code='invalid_orcabus_id'
+    regex=r"^[\w]{26}$",
+    message="ULID is expected to be 26 characters long",
+    code="invalid_orcabus_id",
 )
 
 
@@ -36,12 +36,12 @@ class OrcaBusBaseManager(models.Manager):
     @staticmethod
     def reduce_multi_values_qor(key: str, values: List[str]):
         if isinstance(
-                values,
-                (
-                        str,
-                        int,
-                        float,
-                ),
+            values,
+            (
+                str,
+                int,
+                float,
+            ),
         ):
             values = [values]
         return reduce(
@@ -104,17 +104,17 @@ class OrcaBusBaseModel(models.Model):
         base_fields = set()
         for f in cls._meta.get_fields():
             if isinstance(
-                    f,
-                    (
-                            ForeignKey,
-                            ForeignObject,
-                            OneToOneField,
-                            ManyToManyField,
-                            ForeignObjectRel,
-                            ManyToOneRel,
-                            ManyToManyRel,
-                            OneToOneRel,
-                    ),
+                f,
+                (
+                    ForeignKey,
+                    ForeignObject,
+                    OneToOneField,
+                    ManyToManyField,
+                    ForeignObjectRel,
+                    ManyToOneRel,
+                    ManyToManyRel,
+                    OneToOneRel,
+                ),
             ):
                 continue
             base_fields.add(f.name)

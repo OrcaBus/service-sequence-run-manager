@@ -7,14 +7,19 @@ import requests
 logger = logging.getLogger(__name__)
 
 DEFAULT_BSSH_BASE_URL = "https://api.aps2.sh.basespace.illumina.com/v2/"
-class BSSHService:
 
+
+class BSSHService:
     """Service class for BSSH (BaseSpace Sequence Hub) operations"""
 
     def __init__(self):
-        assert os.environ.get("BASESPACE_ACCESS_TOKEN_SECRET_ID", None), "BASESPACE_ACCESS_TOKEN_SECRET_ID is not set"
+        assert os.environ.get(
+            "BASESPACE_ACCESS_TOKEN_SECRET_ID", None
+        ), "BASESPACE_ACCESS_TOKEN_SECRET_ID is not set"
         try:
-            BASESPACE_ACCESS_TOKEN = libsm.get_secret(os.environ.get("BASESPACE_ACCESS_TOKEN_SECRET_ID"))
+            BASESPACE_ACCESS_TOKEN = libsm.get_secret(
+                os.environ.get("BASESPACE_ACCESS_TOKEN_SECRET_ID")
+            )
         except Exception as e:
             logger.error(f"Error retrieving BSSH token from the Secret Manager: {e}")
             raise e
@@ -22,11 +27,10 @@ class BSSHService:
         if not BASESPACE_ACCESS_TOKEN:
             raise ValueError("BSSH_TOKEN is not set")
         self.headers = {
-            'Authorization': f'Bearer {BASESPACE_ACCESS_TOKEN}',
-            'Content-Type': 'application/json'
+            "Authorization": f"Bearer {BASESPACE_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
         }
         self.base_url = os.environ.get("BSSH_BASE_URL", DEFAULT_BSSH_BASE_URL)
-
 
     def handle_request_error(self, e: Exception, operation: str):
         """
@@ -37,11 +41,15 @@ class BSSHService:
             operation: Description of the operation being performed
         """
         if isinstance(e, requests.exceptions.HTTPError):
-            logger.error(f"HTTP error occurred: {e.response.status_code} - {e.response.reason}")
+            logger.error(
+                f"HTTP error occurred: {e.response.status_code} - {e.response.reason}"
+            )
             logger.error(f"Response text: {e.response.text}")
             raise ValueError(f"Error {operation}: {str(e)}")
 
-        elif isinstance(e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)):
+        elif isinstance(
+            e, (requests.exceptions.ConnectionError, requests.exceptions.Timeout)
+        ):
             logger.error(f"Connection error occurred: {str(e)}")
             raise ValueError(f"Error connecting to BSSH: {str(e)}")
 
@@ -176,15 +184,12 @@ class BSSHService:
         """
 
         try:
-            response = requests.get(
-                api_url,
-                headers=self.headers
-            )
+            response = requests.get(api_url, headers=self.headers)
 
             # Raise error for bad status codes
             response.raise_for_status()
 
-            logger.info('BSSH run details API call successful.')
+            logger.info("BSSH run details API call successful.")
             return response.json()
 
         except Exception as e:
@@ -196,14 +201,18 @@ class BSSHService:
         Retrieve libraries names from run details
         """
         libraries = []
-        for item in run_details.get('Properties', {}).get('Items', []):
-            if item.get('Type') == 'library[]':
-                libraries.extend([lib.get('Name') for lib in item.get('SampleLibraryItems', [])])
+        for item in run_details.get("Properties", {}).get("Items", []):
+            if item.get("Type") == "library[]":
+                libraries.extend(
+                    [lib.get("Name") for lib in item.get("SampleLibraryItems", [])]
+                )
                 break
         logger.info(f"Retrieved libraries: {libraries} from run details")
         return libraries
 
-    def get_sample_sheet_from_bssh_run_files(self, api_url: str, sample_sheet_name: str) -> Optional[str]:
+    def get_sample_sheet_from_bssh_run_files(
+        self, api_url: str, sample_sheet_name: str
+    ) -> Optional[str]:
         """
         Retrieve sample sheet from ICA project
 
@@ -252,23 +261,30 @@ class BSSHService:
 
         """
 
-        logger.info(f'Bssh run api url: {api_url} , sample sheet name: {sample_sheet_name}')
+        logger.info(
+            f"Bssh run api url: {api_url} , sample sheet name: {sample_sheet_name}"
+        )
         try:
             file_content_url = self._find_sample_sheet_url(api_url, sample_sheet_name)
 
             if not file_content_url:
-                logger.warning(f'Sample sheet {sample_sheet_name} not found in BSSH run {api_url}')
+                logger.warning(
+                    f"Sample sheet {sample_sheet_name} not found in BSSH run {api_url}"
+                )
                 return None
 
-            logger.info(f'File content url: {file_content_url}')
+            logger.info(f"File content url: {file_content_url}")
 
             return self._fetch_and_decode_file_content(file_content_url)
 
         except Exception as e:
-            logger.error(f'Error getting sample sheet file: {e}')
+            logger.error(f"Error getting sample sheet file: {e}")
             self.handle_request_error(e, "when getting sample sheet file")
 
-    def get_all_sample_sheet_from_bssh_run_files(self, api_url: str, ) -> Optional[List[Dict[str, str]]]:
+    def get_all_sample_sheet_from_bssh_run_files(
+        self,
+        api_url: str,
+    ) -> Optional[List[Dict[str, str]]]:
         """
         Get all sample sheet from BSSH run files, Sample sheet name will be start with SampleSheet.XXXXX.csv, and is csv file
         """
@@ -278,16 +294,17 @@ class BSSHService:
             for url in sample_sheet_urls:
                 if not url:
                     continue
-                content = self._fetch_and_decode_file_content(url['url'])
-                sample_sheet_contents.append({
-                    'name': url['name'],
-                    'content': content
-                })
+                content = self._fetch_and_decode_file_content(url["url"])
+                sample_sheet_contents.append({"name": url["name"], "content": content})
             return sample_sheet_contents
         except Exception as e:
-            self.handle_request_error(e, "when getting all sample sheet from BSSH run files")
+            self.handle_request_error(
+                e, "when getting all sample sheet from BSSH run files"
+            )
 
-    def _find_sample_sheet_url(self, api_url: str, sample_sheet_name: str) -> Optional[str]:
+    def _find_sample_sheet_url(
+        self, api_url: str, sample_sheet_name: str
+    ) -> Optional[str]:
         """
         Find the URL of the sample sheet file in the BSSH run files
         Args:
@@ -303,23 +320,25 @@ class BSSHService:
 
             while True:
                 params = {
-                    'extension': 'csv',
-                    'directory': '/',
-                    'offset': offset,
-                    'limit': limit
+                    "extension": "csv",
+                    "directory": "/",
+                    "offset": offset,
+                    "limit": limit,
                 }
 
-                response = requests.get(bssh_run_files_url, params=params, headers=self.headers)
+                response = requests.get(
+                    bssh_run_files_url, params=params, headers=self.headers
+                )
                 response.raise_for_status()
 
-                files = response.json().get('Items', [])
+                files = response.json().get("Items", [])
 
                 if not files:
                     break
 
                 for file in files:
-                    if file['Name'] == sample_sheet_name:
-                        return file['HrefContent']
+                    if file["Name"] == sample_sheet_name:
+                        return file["HrefContent"]
 
                 if len(files) < limit:
                     break
@@ -330,7 +349,10 @@ class BSSHService:
         except Exception as e:
             self.handle_request_error(e, "when getting sample sheet file content url")
 
-    def _find_all_sample_sheet_urls(self, api_url: str, ) -> Optional[List[Dict[str, str]]]:
+    def _find_all_sample_sheet_urls(
+        self,
+        api_url: str,
+    ) -> Optional[List[Dict[str, str]]]:
         """
         Get all sample sheet from BSSH run files, Sample sheet name will be start with SampleSheet.XXXXX.csv, and is csv file
         """
@@ -342,26 +364,30 @@ class BSSHService:
 
             while True:
                 params = {
-                    'extension': 'csv',
-                    'directory': '/',
-                    'offset': offset,
-                    'limit': limit
+                    "extension": "csv",
+                    "directory": "/",
+                    "offset": offset,
+                    "limit": limit,
                 }
 
-                response = requests.get(bssh_run_files_url, params=params, headers=self.headers)
+                response = requests.get(
+                    bssh_run_files_url, params=params, headers=self.headers
+                )
                 response.raise_for_status()
 
-                files = response.json().get('Items', [])
+                files = response.json().get("Items", [])
 
                 if not files:
                     break
 
                 for file in files:
-                    if file['Name'].endswith('.csv') and ('samplesheet' in file['Name'].lower() or 'sample_sheet' in file['Name'].lower()):
-                        sample_sheet_urls.append({
-                            'name': file['Name'],
-                            'url': file['HrefContent']
-                        })
+                    if file["Name"].endswith(".csv") and (
+                        "samplesheet" in file["Name"].lower()
+                        or "sample_sheet" in file["Name"].lower()
+                    ):
+                        sample_sheet_urls.append(
+                            {"name": file["Name"], "url": file["HrefContent"]}
+                        )
 
                 if len(files) < limit:
                     break
@@ -372,7 +398,6 @@ class BSSHService:
         except Exception as e:
             self.handle_request_error(e, "when getting sample sheet file content url")
 
-
     def _fetch_and_decode_file_content(self, content_url: str) -> Optional[str]:
         """Fetch file content and return as Jsonb format to persist in DB"""
         try:
@@ -381,9 +406,9 @@ class BSSHService:
 
             content = response.content
             if not content:
-                raise ValueError('Empty content received from BSSH')
+                raise ValueError("Empty content received from BSSH")
 
-            return content.decode('utf-8')
+            return content.decode("utf-8")
 
         except Exception as e:
             self.handle_request_error(e, "when fetching and encoding file content")

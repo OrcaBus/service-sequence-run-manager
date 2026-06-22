@@ -4,7 +4,11 @@ from libumccr import libjson
 from libumccr.aws import libssm, libeb
 from mockito import when, verify
 
-from sequence_run_manager.models.sequence import Sequence, SequenceStatus, LibraryAssociation
+from sequence_run_manager.models.sequence import (
+    Sequence,
+    SequenceStatus,
+    LibraryAssociation,
+)
 from sequence_run_manager.models.state import State
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.tests.factories import TestConstant
@@ -48,12 +52,14 @@ example event:
     }
 """
 
+
 class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
     def setUp(self) -> None:
         super(BSSHEventUnitTests, self).setUp()
 
     def tearDown(self) -> None:
         super(BSSHEventUnitTests, self).tearDown()
+
     #  comment as eventbridge rule will filter out unsupported event type
     # def test_unsupported_ens_event_type(self):
     #     """
@@ -93,24 +99,26 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         """
         when(libssm).get_ssm_param(...).thenReturn(libjson.dumps([]))
 
-        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('Uploading'), None)
-
-        qs = Sequence.objects.filter(
-            sequence_run_id=TestConstant.sequence_run_id.value
+        _ = bssh_event.event_handler(
+            SequenceRunManagerProcFactory.bssh_event_message("Uploading"), None
         )
+
+        qs = Sequence.objects.filter(sequence_run_id=TestConstant.sequence_run_id.value)
         seq = qs.get()
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertEqual(1, qs.count())
         qs_states = State.objects.filter(sequence=seq)
         self.assertEqual(1, qs_states.count())
-        verify(libeb, times=1).eb_client(...)  # 1 event should fire: SequenceRunStateChange
+        verify(libeb, times=1).eb_client(
+            ...
+        )  # 1 event should fire: SequenceRunStateChange
 
         # test event update to default NEW status
-        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message(), None)
-
-        qs = Sequence.objects.filter(
-            sequence_run_id=TestConstant.sequence_run_id.value
+        _ = bssh_event.event_handler(
+            SequenceRunManagerProcFactory.bssh_event_message(), None
         )
+
+        qs = Sequence.objects.filter(sequence_run_id=TestConstant.sequence_run_id.value)
         seq = qs.get()
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertEqual(1, qs.count())
@@ -120,25 +128,29 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         self.assertEqual(1, qs_sample_sheet.count())
         qs_libraries = LibraryAssociation.objects.filter(sequence=seq)
         self.assertEqual(2, qs_libraries.count())
-        verify(libeb, times=3).eb_client(...)  # 2 new events should fire: SequenceRunSampleSheetChange, SequenceRunLibraryLinkingChange
+        verify(libeb, times=3).eb_client(
+            ...
+        )  # 2 new events should fire: SequenceRunSampleSheetChange, SequenceRunLibraryLinkingChange
 
         # test event update to completed status
-        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('Complete'), None)
-        qs = Sequence.objects.filter(
-            sequence_run_id=TestConstant.sequence_run_id.value
+        _ = bssh_event.event_handler(
+            SequenceRunManagerProcFactory.bssh_event_message("Complete"), None
         )
+        qs = Sequence.objects.filter(sequence_run_id=TestConstant.sequence_run_id.value)
         seq = qs.get()
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertEqual(SequenceStatus.SUCCEEDED, seq.status)
         qs_states = State.objects.filter(sequence=seq)
         self.assertEqual(3, qs_states.count())
-        verify(libeb, times=4).eb_client(...)  # 1 new event should fire: SequenceRunStatusChange
+        verify(libeb, times=4).eb_client(
+            ...
+        )  # 1 new event should fire: SequenceRunStatusChange
 
         # test event with conversion sequence (pending analysis status)
-        _ = bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message('PendingAnalysis'), None)
-        qs = Sequence.objects.filter(
-            sequence_run_id=TestConstant.sequence_run_id.value
+        _ = bssh_event.event_handler(
+            SequenceRunManagerProcFactory.bssh_event_message("PendingAnalysis"), None
         )
+        qs = Sequence.objects.filter(sequence_run_id=TestConstant.sequence_run_id.value)
         seq = qs.get()
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertEqual(SequenceStatus.SUCCEEDED, seq.status)
@@ -162,8 +174,10 @@ class BSSHEventUnitTests(SequenceRunProcUnitTestCase):
         )
 
         # Test that SequenceRuleError logger is raised
-        with self.assertLogs(logger, level='WARNING') as context:
-            bssh_event.event_handler(SequenceRunManagerProcFactory.bssh_event_message(), None) # change status to complete
+        with self.assertLogs(logger, level="WARNING") as context:
+            bssh_event.event_handler(
+                SequenceRunManagerProcFactory.bssh_event_message(), None
+            )  # change status to complete
 
         # Verify the logging message
         self.assertIn("marked for emergency stop", str(context.output))

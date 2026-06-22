@@ -13,7 +13,9 @@ from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
-from sequence_run_manager_proc.services.sequence_library_srv import update_sequence_run_libraries_linking
+from sequence_run_manager_proc.services.sequence_library_srv import (
+    update_sequence_run_libraries_linking,
+)
 from sequence_run_manager_proc.services.sequence_srv import SequenceConfig
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
@@ -21,7 +23,10 @@ from sequence_run_manager_proc.services.ica_srv import ICAService
 
 logger = logging.getLogger(__name__)
 
-def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleSheetDomain]:
+
+def create_sequence_sample_sheet_from_bssh_event(
+    payload: dict,
+) -> Optional[SampleSheetDomain]:
     """
     Check if the sample sheet for a sequence exists;
     if not, create it by making BSSH API call.
@@ -32,18 +37,26 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
     try:
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
-        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet")
+        logger.error(
+            f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet"
+        )
         return None
 
     # check if this sequence run already has sample sheet, if so, skip creation
     if SampleSheet.objects.filter(sequence=sequence_run).exists():
-        logger.info(f"Sample sheet already exists for sequence {payload['id']}, skipping creation")
+        logger.info(
+            f"Sample sheet already exists for sequence {payload['id']}, skipping creation"
+        )
         return None
 
     try:
-        sample_sheet, samplesheet_content = create_sequence_sample_sheet(sequence_run, payload)
+        sample_sheet, samplesheet_content = create_sequence_sample_sheet(
+            sequence_run, payload
+        )
         if not sample_sheet or not samplesheet_content:
-            logger.error(f"Error creating sample sheet or no sample sheet name found for sequence {payload['id']}.")
+            logger.error(
+                f"Error creating sample sheet or no sample sheet name found for sequence {payload['id']}."
+            )
             return None
         return SampleSheetDomain(
             instrument_run_id=sequence_run.instrument_run_id,
@@ -53,8 +66,11 @@ def create_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[Sample
             sample_sheet_has_changed=True,
         )
     except Exception as e:
-        logger.error(f"Error creating sample sheet for sequence {payload['id']}: {str(e)}. Will retry on next state change.")
+        logger.error(
+            f"Error creating sample sheet for sequence {payload['id']}: {str(e)}. Will retry on next state change."
+        )
         return None
+
 
 def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
     """
@@ -63,7 +79,9 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
 
     assert event_detail["instrumentRunId"] is not None, "instrument run id is required"
     assert event_detail["sampleSheetName"] is not None, "sample sheet name is required"
-    assert event_detail["samplesheetBase64gz"] is not None, "sample sheet base64 is required"
+    assert (
+        event_detail["samplesheetBase64gz"] is not None
+    ), "sample sheet base64 is required"
 
     sequence_run = None
     instrument_run_id = event_detail["instrumentRunId"]
@@ -72,24 +90,31 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
     #  step 1: check if the sequence run exists, create a fake sequence run if not
     if event_detail.get("sequenceRunId") is not None:
         try:
-            sequence_run = Sequence.objects.get(sequence_run_id=event_detail["sequenceRunId"])
+            sequence_run = Sequence.objects.get(
+                sequence_run_id=event_detail["sequenceRunId"]
+            )
         except Sequence.DoesNotExist:
-            logger.error(f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence sample sheet from SRSSE event")
+            logger.error(
+                f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence sample sheet from SRSSE event"
+            )
             return
     else:
         # create a fake sequence run
         sequence_run = Sequence.objects.create(
             instrument_run_id=instrument_run_id,
-            sequence_run_id="r."+ulid.new().str,
+            sequence_run_id="r." + ulid.new().str,
             sample_sheet_name=samplesheet_name,
-            start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
+            start_time=timezone.now(),  # add start time to record the time when the (ghost) sequence run is created
         )
-        logger.info(f"Created a fake sequence run {sequence_run.sequence_run_id} for instrument run {instrument_run_id}")
-
+        logger.info(
+            f"Created a fake sequence run {sequence_run.sequence_run_id} for instrument run {instrument_run_id}"
+        )
 
     content_base64_gz = event_detail["samplesheetBase64gz"]
     # Decode from base64+gzip to get original CSV string
-    original_csv_content = gzip.decompress(base64.b64decode(content_base64_gz)).decode('utf-8')
+    original_csv_content = gzip.decompress(base64.b64decode(content_base64_gz)).decode(
+        "utf-8"
+    )
     content_dict = parse_samplesheet(original_csv_content)
 
     # step 2: create a sample sheet for the sequence run
@@ -111,21 +136,34 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
         )
         logger.info(f"Created a comment for sample sheet {samplesheet_name}")
     else:
-        logger.info(f"No comment provided for sample sheet {event_detail['sampleSheetName']}")
+        logger.info(
+            f"No comment provided for sample sheet {event_detail['sampleSheetName']}"
+        )
 
     # step 4: check if there is library linking change, if there is any change, create library associations and emit event to event bridge
-    linking_libraries = list(dict.fromkeys(entry["sample_id"] for entry in content_dict.get("bclconvert_data", [])))
+    linking_libraries = list(
+        dict.fromkeys(
+            entry["sample_id"] for entry in content_dict.get("bclconvert_data", [])
+        )
+    )
     if linking_libraries:
         # update the sequence run libraries linking
         try:
             update_sequence_run_libraries_linking(sequence_run, linking_libraries)
         except Exception as e:
-            logger.error(f"Error updating sequence run libraries linking for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
+            logger.error(
+                f"Error updating sequence run libraries linking for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change."
+            )
             return
     else:
-        logger.info(f"No library linking found in samplesheet for sequence run {sequence_run.sequence_run_id}")
+        logger.info(
+            f"No library linking found in samplesheet for sequence run {sequence_run.sequence_run_id}"
+        )
 
-def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleSheetDomain]:
+
+def check_sequence_sample_sheet_from_bssh_event(
+    payload: dict,
+) -> Optional[SampleSheetDomain]:
     """
     Check if the sample sheet for a sequence exists;
     if not, create it by making BSSH API call.
@@ -134,16 +172,22 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
     """
     assert payload["id"] is not None, "sequence run id is required"
     if not payload.get("apiUrl", None):
-        logger.warning(f"No API URL provided for sequence {payload['id']}, skipping sample sheet check")
+        logger.warning(
+            f"No API URL provided for sequence {payload['id']}, skipping sample sheet check"
+        )
         return None
     if not payload.get("sampleSheetName", None):
-        logger.warning(f"No sample sheet name provided for sequence {payload['id']}, skipping sample sheet check")
+        logger.warning(
+            f"No sample sheet name provided for sequence {payload['id']}, skipping sample sheet check"
+        )
         return None
 
     try:
         sequence_run = Sequence.objects.get(sequence_run_id=payload["id"])
     except Sequence.DoesNotExist:
-        logger.error(f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet from bssh event")
+        logger.error(
+            f"Sequence run {payload['id']} not found when checking or creating sequence sample sheet from bssh event"
+        )
         return None
 
     api_url = payload["apiUrl"]
@@ -151,27 +195,41 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
 
     try:
         bssh_srv = BSSHService()
-        sample_sheet_content = bssh_srv.get_sample_sheet_from_bssh_run_files(api_url, sample_sheet_name)
+        sample_sheet_content = bssh_srv.get_sample_sheet_from_bssh_run_files(
+            api_url, sample_sheet_name
+        )
     except Exception as e:
-        logger.error(f"Error getting sample sheet {sample_sheet_name} from BSSH API for sequence {sequence_run.sequence_run_id} at {api_url}: {str(e)}.")
+        logger.error(
+            f"Error getting sample sheet {sample_sheet_name} from BSSH API for sequence {sequence_run.sequence_run_id} at {api_url}: {str(e)}."
+        )
         return None
 
     if not sample_sheet_content:
-        logger.warning(f"Sample sheet {sample_sheet_name} not found for sequence {sequence_run.sequence_run_id} at {api_url}.")
+        logger.warning(
+            f"Sample sheet {sample_sheet_name} not found for sequence {sequence_run.sequence_run_id} at {api_url}."
+        )
         return None
 
     try:
         content_dict = parse_samplesheet(sample_sheet_content)
     except Exception as e:
-        logger.error(f"Error parsing sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}.")
+        logger.error(
+            f"Error parsing sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}."
+        )
         return None
 
     # Check if sample sheet already exists , if already exists, compare the content, if different, update the sample sheet content, if not return none
     # if not exists, create a new sample sheet
-    if SampleSheet.objects.filter(sequence=sequence_run, sample_sheet_name=sample_sheet_name).exists():
-        sample_sheet_obj = SampleSheet.objects.get(sequence=sequence_run, sample_sheet_name=sample_sheet_name)
+    if SampleSheet.objects.filter(
+        sequence=sequence_run, sample_sheet_name=sample_sheet_name
+    ).exists():
+        sample_sheet_obj = SampleSheet.objects.get(
+            sequence=sequence_run, sample_sheet_name=sample_sheet_name
+        )
         if sample_sheet_obj.sample_sheet_content != content_dict:
-            logger.info(f"Sample sheet {sample_sheet_name} content is different for sequence {sequence_run.sequence_run_id} from bssh event")
+            logger.info(
+                f"Sample sheet {sample_sheet_name} content is different for sequence {sequence_run.sequence_run_id} from bssh event"
+            )
             # create a new sample sheet object
             sample_sheet_new_obj = SampleSheet(
                 sequence=sequence_run,
@@ -180,7 +238,9 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sample_sheet_content_original=sample_sheet_content,  # Update original CSV as UTF-8 string
             )
             sample_sheet_new_obj.save()
-            logger.info(f"New sample sheet {sample_sheet_new_obj.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from bssh event")
+            logger.info(
+                f"New sample sheet {sample_sheet_new_obj.sample_sheet_name} created for sequence {sequence_run.sequence_run_id} from bssh event"
+            )
             return SampleSheetDomain(
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
@@ -189,7 +249,9 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sample_sheet_has_changed=True,
             )
         else:
-            logger.info(f"Sample sheet {sample_sheet_name} content is the same for sequence {sequence_run.sequence_run_id} from bssh event")
+            logger.info(
+                f"Sample sheet {sample_sheet_name} content is the same for sequence {sequence_run.sequence_run_id} from bssh event"
+            )
             return None
     else:
         try:
@@ -200,7 +262,9 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sample_sheet_content_original=sample_sheet_content,  # Store original CSV as UTF-8 string
             )
             sample_sheet_obj.save()
-            logger.info(f"Successfully created sample sheet {sample_sheet_obj.sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event")
+            logger.info(
+                f"Successfully created sample sheet {sample_sheet_obj.sample_sheet_name} for sequence {sequence_run.sequence_run_id} from bssh event"
+            )
             return SampleSheetDomain(
                 instrument_run_id=sequence_run.instrument_run_id,
                 sequence_run_id=sequence_run.sequence_run_id,
@@ -209,11 +273,16 @@ def check_sequence_sample_sheet_from_bssh_event(payload: dict)->Optional[SampleS
                 sample_sheet_has_changed=True,
             )
         except Exception as e:
-            logger.error(f"Error creating sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change.")
+            logger.error(
+                f"Error creating sample sheet {sample_sheet_name} for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change."
+            )
             return None
 
+
 @transaction.atomic
-def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Optional[SampleSheet], Optional[str]]:
+def create_sequence_sample_sheet(
+    sequence: Sequence, payload: dict
+) -> tuple[Optional[SampleSheet], Optional[str]]:
     """
     Create a sample sheet for a sequence.
     Check if sample sheet already exists before making API call.
@@ -221,71 +290,99 @@ def create_sequence_sample_sheet(sequence: Sequence, payload: dict) -> tuple[Opt
     """
     api_url = payload.get("apiUrl")
     if not api_url:
-        logger.warning(f"No API URL provided for sequence {sequence.sequence_run_id}, skipping sample sheet creation")
+        logger.warning(
+            f"No API URL provided for sequence {sequence.sequence_run_id}, skipping sample sheet creation"
+        )
         return None, None
 
     try:
         bssh_srv = BSSHService()
         # Get all sample sheet from bssh run files
-        sample_sheet_contents = bssh_srv.get_all_sample_sheet_from_bssh_run_files(api_url)
+        sample_sheet_contents = bssh_srv.get_all_sample_sheet_from_bssh_run_files(
+            api_url
+        )
     except Exception as e:
-        logger.error(f"Error getting sample sheet files from BSSH API for sequence {sequence.sequence_run_id} at {api_url}: {str(e)}. Will retry on next state change.")
+        logger.error(
+            f"Error getting sample sheet files from BSSH API for sequence {sequence.sequence_run_id} at {api_url}: {str(e)}. Will retry on next state change."
+        )
         raise e
 
     if not sample_sheet_contents:
-        logger.warning(f"No sample sheet files found for sequence {sequence.sequence_run_id} at {api_url}. Will retry on next state change.")
+        logger.warning(
+            f"No sample sheet files found for sequence {sequence.sequence_run_id} at {api_url}. Will retry on next state change."
+        )
         return None, None
 
     # Build list of SampleSheet objects to create, then bulk_create at the end
     sample_sheet_objs_to_create = []
 
     # instance and content for sequence sample sheet
-    sequence_samplesheet:SampleSheet = None
+    sequence_samplesheet: SampleSheet = None
     sequence_samplesheet_content: Optional[str] = None
     sequence_samplesheet_name: Optional[str] = sequence.sample_sheet_name
 
     for sample_sheet_content in sample_sheet_contents:
         # Check if the sample sheet already exists
-        if SampleSheet.objects.filter(sequence=sequence, sample_sheet_name=sample_sheet_content['name']).exists():
-            logger.info(f"Sample sheet {sample_sheet_content['name']} already exists for sequence {sequence.sequence_run_id}")
+        if SampleSheet.objects.filter(
+            sequence=sequence, sample_sheet_name=sample_sheet_content["name"]
+        ).exists():
+            logger.info(
+                f"Sample sheet {sample_sheet_content['name']} already exists for sequence {sequence.sequence_run_id}"
+            )
             continue
 
         # Check if content is empty or None
-        if not sample_sheet_content.get('content'):
-            logger.warning(f"Sample sheet {sample_sheet_content.get('name', 'unknown')} has no content for sequence {sequence.sequence_run_id}, skipping")
+        if not sample_sheet_content.get("content"):
+            logger.warning(
+                f"Sample sheet {sample_sheet_content.get('name', 'unknown')} has no content for sequence {sequence.sequence_run_id}, skipping"
+            )
             continue
 
         try:
             # Convert content to JSON format with v2_samplesheet_to_json function
-            content_dict = parse_samplesheet(sample_sheet_content['content'])
+            content_dict = parse_samplesheet(sample_sheet_content["content"])
 
             sample_sheet_obj = SampleSheet(
                 sequence=sequence,
-                sample_sheet_name=sample_sheet_content['name'],
+                sample_sheet_name=sample_sheet_content["name"],
                 sample_sheet_content=content_dict,
-                sample_sheet_content_original=sample_sheet_content['content'],  # Store original CSV as UTF-8 string
+                sample_sheet_content_original=sample_sheet_content[
+                    "content"
+                ],  # Store original CSV as UTF-8 string
             )
             sample_sheet_objs_to_create.append(sample_sheet_obj)
 
-            if sequence_samplesheet_name != None and sequence_samplesheet_name != SequenceConfig.UNKNOWN_VALUE and sample_sheet_content['name'] == sequence_samplesheet_name:
+            if (
+                sequence_samplesheet_name != None
+                and sequence_samplesheet_name != SequenceConfig.UNKNOWN_VALUE
+                and sample_sheet_content["name"] == sequence_samplesheet_name
+            ):
                 sequence_samplesheet = sample_sheet_obj
-                sequence_samplesheet_content = sample_sheet_content['content']
+                sequence_samplesheet_content = sample_sheet_content["content"]
 
         except Exception as e:
-            logger.error(f"Error parsing sample sheet {sample_sheet_content.get('name', 'unknown')} for sequence {sequence.sequence_run_id}: {str(e)}. Continuing with next sample sheet.")
+            logger.error(
+                f"Error parsing sample sheet {sample_sheet_content.get('name', 'unknown')} for sequence {sequence.sequence_run_id}: {str(e)}. Continuing with next sample sheet."
+            )
             continue
 
     if sample_sheet_objs_to_create:
         try:
             SampleSheet.objects.bulk_create(sample_sheet_objs_to_create)
             for obj in sample_sheet_objs_to_create:
-                logger.info(f"Successfully created sample sheet {obj.sample_sheet_name} for sequence {sequence.sequence_run_id}")
+                logger.info(
+                    f"Successfully created sample sheet {obj.sample_sheet_name} for sequence {sequence.sequence_run_id}"
+                )
             return sequence_samplesheet, sequence_samplesheet_content
         except Exception as e:
-            logger.error(f"Error bulk creating sample sheets for sequence {sequence.sequence_run_id}: {str(e)}.")
+            logger.error(
+                f"Error bulk creating sample sheets for sequence {sequence.sequence_run_id}: {str(e)}."
+            )
             return None, None
     else:
-        logger.info(f"No sample sheets to create for sequence {sequence.sequence_run_id}.")
+        logger.info(
+            f"No sample sheets to create for sequence {sequence.sequence_run_id}."
+        )
         return None, None
 
 
@@ -302,13 +399,15 @@ def get_sample_sheet_libraries(sample_sheet: SampleSheet):
     bclconvert_data = sample_sheet.sample_sheet_content.get("bclconvert_data", [])
     # return empty list if no bclconvert_data
     if not bclconvert_data:
-            return []
+        return []
 
     # remove repeated value
     return list(dict.fromkeys(entry["sample_id"] for entry in bclconvert_data))
 
 
-def calculate_checksum(sample_sheet_content_original: str, checksum_type: str = "sha256") -> str:
+def calculate_checksum(
+    sample_sheet_content_original: str, checksum_type: str = "sha256"
+) -> str:
     """
     Calculate checksum from sample sheet content.
     Args:
@@ -320,26 +419,33 @@ def calculate_checksum(sample_sheet_content_original: str, checksum_type: str = 
     if not sample_sheet_content_original:
         return ""
     try:
-        content_bytes = sample_sheet_content_original.encode('utf-8')
+        content_bytes = sample_sheet_content_original.encode("utf-8")
         if checksum_type.lower() == "md5":
             return hashlib.md5(content_bytes).hexdigest()
         elif checksum_type.lower() == "crc32":
             # CRC32 returns a signed integer, convert to unsigned and then to hex
-            crc32_value = zlib.crc32(content_bytes) & 0xffffffff
-            return format(crc32_value, '08x')
+            crc32_value = zlib.crc32(content_bytes) & 0xFFFFFFFF
+            return format(crc32_value, "08x")
         else:  # default to sha256
             return hashlib.sha256(content_bytes).hexdigest()
     except Exception as e:
-        logger.warning(f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}")
+        logger.warning(
+            f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}"
+        )
         return ""
+
 
 def validate_sample_sheet_from_wrsc_event(event_detail: dict):
     """
     Validate the sample sheet from the event detail
     """
     instrument_run_id = event_detail["payload"]["data"]["tags"]["instrumentRunId"]
-    samplesheet_checksum = event_detail["payload"]["data"]["tags"]["samplesheetChecksum"]
-    samplesheet_checksum_type = event_detail["payload"]["data"]["tags"]["samplesheetChecksumType"]
+    samplesheet_checksum = event_detail["payload"]["data"]["tags"][
+        "samplesheetChecksum"
+    ]
+    samplesheet_checksum_type = event_detail["payload"]["data"]["tags"][
+        "samplesheetChecksumType"
+    ]
     sample_sheet_uri = event_detail["payload"]["data"]["inputs"]["sampleSheetUri"]
 
     # step 1: check if the sample sheet exists in the database
@@ -351,12 +457,18 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
     matching_sample_sheet = sample_sheets.filter(sample_sheet_name=samplesheet_name)
     for sample_sheet in matching_sample_sheet:
 
-        calculated_checksum = calculate_checksum(sample_sheet.sample_sheet_content_original, samplesheet_checksum_type)
+        calculated_checksum = calculate_checksum(
+            sample_sheet.sample_sheet_content_original, samplesheet_checksum_type
+        )
         if calculated_checksum == samplesheet_checksum:
-            logger.info(f"Sample sheet {sample_sheet.sample_sheet_name} found for instrument run {instrument_run_id}")
+            logger.info(
+                f"Sample sheet {sample_sheet.sample_sheet_name} found for instrument run {instrument_run_id}"
+            )
             return sample_sheet
 
-    logger.info(f"No sample sheet found with name {samplesheet_name} for instrument run {instrument_run_id}, create a new ")
+    logger.info(
+        f"No sample sheet found with name {samplesheet_name} for instrument run {instrument_run_id}, create a new "
+    )
 
     # step 2: when no match found, we need to create a new sample sheet from the sample sheet uri
 
@@ -367,23 +479,29 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
         ica_svc = ICAService()
         samplesheet_content = ica_svc.get_file_contents_from_uri(sample_sheet_uri)
     except Exception as e:
-        logger.error(f"Error getting samplesheet content from icav2 project data object for sample sheet uri {sample_sheet_uri}: {str(e)}.")
+        logger.error(
+            f"Error getting samplesheet content from icav2 project data object for sample sheet uri {sample_sheet_uri}: {str(e)}."
+        )
         return None
 
     if samplesheet_content:
         content_dict = parse_samplesheet(samplesheet_content)
     else:
-        logger.error(f"Error getting samplesheet content from sample sheet uri {sample_sheet_uri}.")
+        logger.error(
+            f"Error getting samplesheet content from sample sheet uri {sample_sheet_uri}."
+        )
         return None
 
     # create a new sequence object
     sequence = Sequence.objects.create(
         instrument_run_id=instrument_run_id,
-        sequence_run_id="r."+ulid.new().str,
+        sequence_run_id="r." + ulid.new().str,
         sample_sheet_name=samplesheet_name,
-        start_time=timezone.now()  # add start time to record the time when the (ghost) sequence run is created
+        start_time=timezone.now(),  # add start time to record the time when the (ghost) sequence run is created
     )
-    logger.info(f"Successfully created sequence {sequence.sequence_run_id} for instrument run {instrument_run_id}")
+    logger.info(
+        f"Successfully created sequence {sequence.sequence_run_id} for instrument run {instrument_run_id}"
+    )
 
     sample_sheet = SampleSheet.objects.create(
         sequence=sequence,
@@ -391,7 +509,9 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
         sample_sheet_content=content_dict,
         sample_sheet_content_original=samplesheet_content,  # Store original CSV as UTF-8 string
     )
-    logger.info(f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wrsc event")
+    logger.info(
+        f"Successfully created sample sheet {sample_sheet.sample_sheet_name} for sequence {sequence.sequence_run_id} from wrsc event"
+    )
 
     # check if there is library linking change, if there is any change, create library associations and emit event to event bridge
     linking_libraries = get_sample_sheet_libraries(sample_sheet)
@@ -400,7 +520,11 @@ def validate_sample_sheet_from_wrsc_event(event_detail: dict):
         try:
             update_sequence_run_libraries_linking(sequence, linking_libraries)
         except Exception as e:
-            logger.error(f"Error updating sequence run libraries linking for sequence {sequence.sequence_run_id}: {str(e)}")
+            logger.error(
+                f"Error updating sequence run libraries linking for sequence {sequence.sequence_run_id}: {str(e)}"
+            )
             return
     else:
-        logger.info(f"No library linking found in samplesheet for sequence run {sequence.sequence_run_id}")
+        logger.info(
+            f"No library linking found in samplesheet for sequence run {sequence.sequence_run_id}"
+        )

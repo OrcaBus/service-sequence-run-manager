@@ -6,11 +6,15 @@ from typing import Optional
 import hashlib
 
 from sequence_run_manager.models import SampleSheet, Comment
-from sequence_run_manager_proc.domain.events.srssc import SequenceRunSampleSheetChange, AWSEvent
+from sequence_run_manager_proc.domain.events.srssc import (
+    SequenceRunSampleSheetChange,
+    AWSEvent,
+)
 from sequence_run_manager.settings.base import API_VERSION
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 @dataclass
 class SampleSheetDomain:
@@ -31,7 +35,9 @@ class SampleSheetDomain:
     def event_type(self) -> str:
         return SequenceRunSampleSheetChange.__name__
 
-    def _generate_sample_sheet_checksum(self, sample_sheet_content_original: str) -> str:
+    def _generate_sample_sheet_checksum(
+        self, sample_sheet_content_original: str
+    ) -> str:
         """
         Generate a SHA256 checksum from sample sheet content (JSON format).
 
@@ -63,16 +69,22 @@ class SampleSheetDomain:
             return ""
         try:
             # Generate SHA256 hash from original CSV content
-            return hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
+            return hashlib.sha256(
+                sample_sheet_content_original.encode("utf-8")
+            ).hexdigest()
         except Exception as e:
-            logger.warning(f"Failed to generate checksum from sample sheet content: {str(e)}")
+            logger.warning(
+                f"Failed to generate checksum from sample sheet content: {str(e)}"
+            )
             return ""
 
     def to_event(self) -> Optional[SequenceRunSampleSheetChange]:
         sequenceRunManagerBaseApiUrl = os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
         api_base = f"/api/{API_VERSION}/"
         api_url = f"{sequenceRunManagerBaseApiUrl}{api_base}sample_sheet/{self.sample_sheet.orcabus_id}/"
-        checksum = self._generate_sample_sheet_checksum(self.sample_sheet.sample_sheet_content_original)
+        checksum = self._generate_sample_sheet_checksum(
+            self.sample_sheet.sample_sheet_content_original
+        )
         return SequenceRunSampleSheetChange(
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
@@ -92,7 +104,7 @@ class SampleSheetDomain:
         )
 
     def to_put_events_request_entry(
-            self, event_bus_name: str, trace_header: str = ""
+        self, event_bus_name: str, trace_header: str = ""
     ) -> dict:
         """Convert Domain event with envelope to Entry dict struct of PutEvent API"""
         domain_event_with_envelope = self.to_event_with_envelope()

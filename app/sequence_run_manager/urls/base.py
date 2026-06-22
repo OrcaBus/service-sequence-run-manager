@@ -17,23 +17,40 @@ api_base = f"{api_namespace}/{api_version}/"
 
 router = OptionalSlashDefaultRouter()
 router.register(r"sequence_run", SequenceRunViewSet, basename="sequence-run")
-router.register("sequence_run/(?P<orcabus_id>[^/]+)/comment", CommentViewSet, basename="sequence-run-comment")
-router.register("sequence_run/(?P<orcabus_id>[^/]+)/state", StateViewSet, basename="sequence-run-states")
+router.register(
+    "sequence_run/(?P<orcabus_id>[^/]+)/comment",
+    CommentViewSet,
+    basename="sequence-run-comment",
+)
+router.register(
+    "sequence_run/(?P<orcabus_id>[^/]+)/state",
+    StateViewSet,
+    basename="sequence-run-states",
+)
 router.register(r"stats", SequenceStatsViewSet, basename="stats")
 router.register(r"sample_sheet", SampleSheetViewSet, basename="sample-sheet")
 
 # Sequence Run Action
-router.register(r"sequence_run/action", SequenceRunActionViewSet, basename="sequence-run-action")
+router.register(
+    r"sequence_run/action", SequenceRunActionViewSet, basename="sequence-run-action"
+)
 
 # Sequence Concept (refer:https://github.com/umccr/orcabus/issues/947); sequence-runs group by instrument run id
 # future: router.register(r"sequence", SequenceViewSet, basename="sequence-run")
-router.register("sequence/(?P<instrument_run_id>[^/]+)", SequenceViewSet, basename="sequence-by-instrument-run-id")
+router.register(
+    "sequence/(?P<instrument_run_id>[^/]+)",
+    SequenceViewSet,
+    basename="sequence-by-instrument-run-id",
+)
 
 urlpatterns = [
     path(f"{api_base}", include(router.urls)),
-    path('schema/openapi.json', SpectacularJSONAPIView.as_view(), name='schema'),
-    path('schema/swagger-ui/',
-         SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path("schema/openapi.json", SpectacularJSONAPIView.as_view(), name="schema"),
+    path(
+        "schema/swagger-ui/",
+        SpectacularSwaggerView.as_view(url_name="schema"),
+        name="swagger-ui",
+    ),
 ]
 
 handler500 = "rest_framework.exceptions.server_error"

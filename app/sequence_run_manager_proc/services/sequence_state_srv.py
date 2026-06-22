@@ -6,9 +6,9 @@ from django.db.models import QuerySet
 from sequence_run_manager.models.sequence import Sequence, SequenceStatus
 from sequence_run_manager.models.state import State
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 @transaction.atomic
 def create_sequence_state_from_bssh_event(payload: dict) -> None:
@@ -24,5 +24,9 @@ def create_sequence_state_from_bssh_event(payload: dict) -> None:
     # None by default
     comment = None
 
-    State.objects.create(status=status, timestamp=timestamp, sequence=sequence, comment=comment)
-    logger.info(f"Created new Sequence State (sequence_run_id={sequence.sequence_run_id}, status={status})")
+    State.objects.create(
+        status=status, timestamp=timestamp, sequence=sequence, comment=comment
+    )
+    logger.info(
+        f"Created new Sequence State (sequence_run_id={sequence.sequence_run_id}, status={status})"
+    )

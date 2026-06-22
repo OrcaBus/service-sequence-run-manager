@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest import TestCase
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
+
 class TestSampleSheetParser(TestCase):
     def setUp(self):
         super().setUp()
@@ -18,11 +19,15 @@ class TestSampleSheetParser(TestCase):
         """
 
         # read files from ./examples/standard-sheet-with-settings.csv
-        with open(Path(__file__).parent / "examples/standard-sheet-with-settings.csv", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/standard-sheet-with-settings.csv", "r"
+        ) as f:
             samplesheet = f.read()
         result = parse_samplesheet(samplesheet)
         # read expected result from ./examples/standard-sheet-with-settings.json
-        with open(Path(__file__).parent / "examples/standard-sheet-with-settings.json", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/standard-sheet-with-settings.json", "r"
+        ) as f:
             expected_result = json.load(f)
         self.compare_dicts(result, expected_result)
         self.assertEqual(result, expected_result)
@@ -32,11 +37,15 @@ class TestSampleSheetParser(TestCase):
         python manage.py test sequence_run_manager_proc.tests.test_samplesheet_parser.TestSampleSheetParser.test_parse_tso500_cloud_settings
         """
         # read files from ./examples/tso500-cloud-settings.csv
-        with open(Path(__file__).parent / "examples/tso500-cloud-settings.csv", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/tso500-cloud-settings.csv", "r"
+        ) as f:
             samplesheet = f.read()
         result = parse_samplesheet(samplesheet)
         # read expected result from ./examples/tso500-cloud-settings.json
-        with open(Path(__file__).parent / "examples/tso500-cloud-settings.json", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/tso500-cloud-settings.json", "r"
+        ) as f:
             expected_result = json.load(f)
         self.compare_dicts(result, expected_result)
         self.assertEqual(result, expected_result)
@@ -46,11 +55,15 @@ class TestSampleSheetParser(TestCase):
         python manage.py test sequence_run_manager_proc.tests.test_samplesheet_parser.TestSampleSheetParser.test_parse_original_samplesheet
         """
         # read files from ./examples/original-sheet-from-excel.csv
-        with open(Path(__file__).parent / "examples/original-sheet-from-excel.csv", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/original-sheet-from-excel.csv", "r"
+        ) as f:
             samplesheet = f.read()
         result = parse_samplesheet(samplesheet)
         # read expected result from ./examples/original-sheet-from-excel.json
-        with open(Path(__file__).parent / "examples/original-sheet-from-excel.json", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/original-sheet-from-excel.json", "r"
+        ) as f:
             expected_result = json.load(f)
         self.compare_dicts(result, expected_result)
         self.assertEqual(result, expected_result)
