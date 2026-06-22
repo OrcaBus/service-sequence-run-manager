@@ -6,7 +6,11 @@ from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.sequence import Sequence
-from sequence_run_manager.serializers.comment import CommentSerializer, CommentCreateRequestSerializer, CommentUpdateRequestSerializer
+from sequence_run_manager.serializers.comment import (
+    CommentSerializer,
+    CommentCreateRequestSerializer,
+    CommentUpdateRequestSerializer,
+)
 from sequence_run_manager.viewsets.utils import get_email_from_bearer_authorization
 
 
@@ -14,9 +18,7 @@ from sequence_run_manager.viewsets.utils import get_email_from_bearer_authorizat
     create=extend_schema(
         request=CommentCreateRequestSerializer,
         responses={201: CommentSerializer},
-        description=(
-            "Create a comment (body: `comment`, `created_by`). "
-        ),
+        description=("Create a comment (body: `comment`, `created_by`). "),
     ),
     partial_update=extend_schema(
         request=CommentUpdateRequestSerializer,
@@ -35,18 +37,22 @@ from sequence_run_manager.viewsets.utils import get_email_from_bearer_authorizat
         description="Soft-delete. Caller must present Authorization: Bearer <jwt> (RS256); email claim must match comment author (created_by). Signature is not verified here — authenticate at API Gateway.",
     ),
 )
-class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.ListModelMixin, GenericViewSet):
+class CommentViewSet(
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.ListModelMixin,
+    GenericViewSet,
+):
     serializer_class = CommentSerializer
     search_fields = Comment.get_base_fields()
     pagination_class = None
-    lookup_value_regex = "[^/]+" # to allow id prefix
+    lookup_value_regex = "[^/]+"  # to allow id prefix
     # Allow list/create/partial update and soft-delete; PUT is intentionally excluded.
-    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         return Comment.objects.filter(
-            target_id=self.kwargs["orcabus_id"],
-            is_deleted=False
+            target_id=self.kwargs["orcabus_id"], is_deleted=False
         )
 
     def perform_create(self, serializer):
@@ -59,7 +65,9 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
         try:
             Sequence.objects.get(orcabus_id=seq_orcabus_id)
         except Sequence.DoesNotExist:
-            return Response({"detail": "SequenceRun not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "SequenceRun not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Validate input payload shape: only `comment` + `created_by`
         input_serializer = CommentCreateRequestSerializer(data=request.data)
@@ -72,17 +80,25 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
         )
         serializer = self.get_serializer(comment_obj)
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object() # PATCH always calls this with partial=True; we don't use it.
+        partial = kwargs.pop("partial", False)
+        instance = (
+            self.get_object()
+        )  # PATCH always calls this with partial=True; we don't use it.
 
         body = CommentUpdateRequestSerializer(data=request.data, partial=partial)
         body.is_valid(raise_exception=True)
         vd = body.validated_data
 
-        if "created_by" in vd and vd["created_by"] is not None and vd["created_by"] != "":
+        if (
+            "created_by" in vd
+            and vd["created_by"] is not None
+            and vd["created_by"] != ""
+        ):
             actor = vd["created_by"].strip().lower()
         else:
             actor = get_email_from_bearer_authorization(request)
@@ -93,7 +109,7 @@ class CommentViewSet(mixins.CreateModelMixin, mixins.UpdateModelMixin, mixins.Li
         instance.comment = vd["comment"]
         instance.save(update_fields=["comment", "updated_at"])
 
-        data = CommentSerializer(instance).data # return the updated comment
+        data = CommentSerializer(instance).data  # return the updated comment
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_200_OK, headers=headers)
 

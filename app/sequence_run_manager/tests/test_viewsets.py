@@ -11,14 +11,17 @@ from datetime import timedelta
 from rest_framework.test import APIClient
 import hashlib
 
-from sequence_run_manager.models.sequence import Sequence, SequenceStatus, LibraryAssociation
+from sequence_run_manager.models.sequence import (
+    Sequence,
+    SequenceStatus,
+    LibraryAssociation,
+)
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.state import State
 
 from sequence_run_manager.urls.base import api_base
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
-
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -70,7 +73,9 @@ class SequenceViewSetTestCase(TestCase):
         )
 
         # read files from ./examples/standard-sheet-with-settings.csv
-        with open(Path(__file__).parent / "examples/standard-sheet-with-settings.csv", "r") as f:
+        with open(
+            Path(__file__).parent / "examples/standard-sheet-with-settings.csv", "r"
+        ) as f:
             samplesheet = f.read()
         sample_sheet_content = parse_samplesheet(samplesheet)
         SampleSheet.objects.create(
@@ -110,7 +115,9 @@ class SequenceViewSetTestCase(TestCase):
         State.objects.all().delete()
         LibraryAssociation.objects.all().delete()
 
-    def test_list_status_filters_sequence_row_group_status_filters_latest_in_group(self):
+    def test_list_status_filters_sequence_row_group_status_filters_latest_in_group(
+        self,
+    ):
         """
         ``GET /sequence_run/?status=`` filters ``Sequence.status`` per row.
         ``list_by_instrument_run_id`` uses ``status`` against the group's latest-by-start_time status.
@@ -234,7 +241,9 @@ class SequenceViewSetTestCase(TestCase):
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_get_by_uk_surrogate_key
         """
         logger.info("Check if unique data has a single entry")
-        response = self.client.get(f"{self.sequence_run_endpoint}/?instrument_run_id=190101_A01052_0001_BH5LY7ACGT")
+        response = self.client.get(
+            f"{self.sequence_run_endpoint}/?instrument_run_id=190101_A01052_0001_BH5LY7ACGT"
+        )
         results_response = response.data["results"]
         self.assertEqual(
             len(results_response), 1, "Single result is expected for unique data"
@@ -245,7 +254,9 @@ class SequenceViewSetTestCase(TestCase):
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_get_by_sequence_run_id
         """
         logger.info("Check if unique data has a single entry")
-        response = self.client.get(f"{self.sequence_run_endpoint}/?sequence_run_id=r.AAAAAA")
+        response = self.client.get(
+            f"{self.sequence_run_endpoint}/?sequence_run_id=r.AAAAAA"
+        )
         results_response = response.data["results"]
         self.assertEqual(
             len(results_response), 1, "Single result is expected for unique data"
@@ -263,13 +274,16 @@ class SequenceViewSetTestCase(TestCase):
             0,
             "No results are expected for unrecognized query parameter",
         )
+
     def test_get_sequence_runs_by_instrument_run_id(self):
         """
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_get_sequence_runs_by_instrument_run_id
         """
         logger.info("Get sequence runs by instrument run id")
         instrument_run_id = "190101_A01052_0001_BH5LY7ACGT"
-        response = self.client.get(f"{self.sequence_endpoint}/{instrument_run_id}/sequence_run/")
+        response = self.client.get(
+            f"{self.sequence_endpoint}/{instrument_run_id}/sequence_run/"
+        )
         self.assertEqual(response.status_code, 200, "Ok status response is expected")
         self.assertEqual(len(response.data), 1, "At least one result is expected")
 
@@ -279,7 +293,9 @@ class SequenceViewSetTestCase(TestCase):
         """
         logger.info("Get sequence states")
         instrument_run_id = "190101_A01052_0001_BH5LY7ACGT"
-        response = self.client.get(f"{self.sequence_endpoint}/{instrument_run_id}/states/")
+        response = self.client.get(
+            f"{self.sequence_endpoint}/{instrument_run_id}/states/"
+        )
         self.assertEqual(response.status_code, 200, "Ok status response is expected")
         self.assertEqual(len(response.data), 2, "Two states are expected")
 
@@ -303,7 +319,9 @@ class SequenceViewSetTestCase(TestCase):
         """
         logger.info("Update sequence comment")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
         # Authorisation via body `created_by` matching the stored author (case-insensitive in the view).
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
@@ -311,19 +329,27 @@ class SequenceViewSetTestCase(TestCase):
                 "comment": "TestCommentUpdated",
                 "created_by": "TestUser",
             },
-            format='json'
+            format="json",
         )
         self.assertEqual(response.status_code, 200, "Ok status response is expected")
-        self.assertEqual(response.data["comment"], "TestCommentUpdated", "Comment is expected")
-        self.assertEqual(response.data["created_by"], "TestUser", "Created by is expected")
+        self.assertEqual(
+            response.data["comment"], "TestCommentUpdated", "Comment is expected"
+        )
+        self.assertEqual(
+            response.data["created_by"], "TestUser", "Created by is expected"
+        )
 
     def test_update_sequence_run_comment_via_bearer_email(self):
         """
         PATCH with only `comment`; actor email comes from Authorization Bearer JWT claim.
         """
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}")
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}"
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             {"comment": "BearerUpdated"},
@@ -336,7 +362,9 @@ class SequenceViewSetTestCase(TestCase):
     def test_update_sequence_run_comment_requires_bearer_when_created_by_omitted(self):
         """Without `created_by` in the body, the view requires a Bearer token with an email claim."""
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             {"comment": "NoAuth"},
@@ -346,8 +374,12 @@ class SequenceViewSetTestCase(TestCase):
 
     def test_update_sequence_run_comment_permission_denied_wrong_bearer_email(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('someone.else@example.com')}")
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('someone.else@example.com')}"
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             {"comment": "Hijack"},
@@ -358,7 +390,9 @@ class SequenceViewSetTestCase(TestCase):
 
     def test_update_sequence_run_comment_permission_denied_wrong_created_by(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
             {"comment": "Nope", "created_by": "NotTheAuthor"},
@@ -372,16 +406,28 @@ class SequenceViewSetTestCase(TestCase):
         """
         logger.info("Delete sequence comment")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        comment = Comment.objects.get(target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE)
+        comment = Comment.objects.get(
+            target_id=sequence_run.orcabus_id, target_type=TargetType.SEQUENCE
+        )
 
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}")
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('TestUser')}"
+        )
 
         response = self.client.delete(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/comment/{comment.orcabus_id}/",
-            format='json'
+            format="json",
         )
-        self.assertEqual(response.status_code, 204, "No content status response is expected")
-        self.assertEqual(Comment.objects.filter(orcabus_id=comment.orcabus_id, is_deleted=True).count(), 1, "Comment is expected to be deleted")
+        self.assertEqual(
+            response.status_code, 204, "No content status response is expected"
+        )
+        self.assertEqual(
+            Comment.objects.filter(
+                orcabus_id=comment.orcabus_id, is_deleted=True
+            ).count(),
+            1,
+            "Comment is expected to be deleted",
+        )
         self.client.credentials()
 
     def test_get_states_transition_validation_map(self):
@@ -400,7 +446,9 @@ class SequenceViewSetTestCase(TestCase):
 
     def test_patch_state_comment(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        state = State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        state = (
+            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
             {"comment": "Resolution note"},
@@ -413,7 +461,9 @@ class SequenceViewSetTestCase(TestCase):
 
     def test_patch_state_requires_comment(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        state = State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        state = (
+            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        )
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
             {},
@@ -458,7 +508,11 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.data["status"], "RESOLVED")
         self.assertEqual(response.data["comment"], "Handled")
         sequence_run.refresh_from_db()
-        self.assertEqual(sequence_run.status, "RESOLVED", "Sequence status should be updated to RESOLVED")
+        self.assertEqual(
+            sequence_run.status,
+            "RESOLVED",
+            "Sequence status should be updated to RESOLVED",
+        )
 
     def test_create_state_deprecated_after_succeeded(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -476,7 +530,11 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "DEPRECATED")
         sequence_run.refresh_from_db()
-        self.assertEqual(sequence_run.status, "DEPRECATED", "Sequence status should be updated to DEPRECATED")
+        self.assertEqual(
+            sequence_run.status,
+            "DEPRECATED",
+            "Sequence status should be updated to DEPRECATED",
+        )
 
     def test_create_state_only_deprecated_when_no_prior_states(self):
         orphan = Sequence.objects.create(
@@ -508,7 +566,7 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(good.status_code, 201)
         self.assertEqual(good.data["status"], "DEPRECATED")
 
-    @patch('sequence_run_manager.viewsets.sequence_run_action.emit_srm_api_event')
+    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srm_api_event")
     def test_add_samplesheet_action(self, mock_emit_event):
         """
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_add_samplesheet_action
@@ -518,7 +576,9 @@ class SequenceViewSetTestCase(TestCase):
         mock_emit_event.return_value = None
 
         # Read the file content from ./examples/standard-sheet-with-settings.csv
-        samplesheet_path = Path(__file__).parent / "examples/standard-sheet-with-settings.csv"
+        samplesheet_path = (
+            Path(__file__).parent / "examples/standard-sheet-with-settings.csv"
+        )
         with open(samplesheet_path, "rb") as f:
             samplesheet_content = f.read()
 
@@ -526,7 +586,7 @@ class SequenceViewSetTestCase(TestCase):
         uploaded_file = SimpleUploadedFile(
             name="standard-sheet-with-settings.csv",
             content=samplesheet_content,
-            content_type="text/csv"
+            content_type="text/csv",
         )
 
         # POST request with file upload using DRF's APIClient
@@ -535,49 +595,119 @@ class SequenceViewSetTestCase(TestCase):
             f"{self.sequence_run_endpoint}/action/add_samplesheet/",
             data={
                 "instrument_run_id": "190101_A01052_0001_BH5LY7ACGT",
-                'created_by': 'TestUser001',
-                'comment': 'TestComment',
-                'file': uploaded_file,  # Include file in data dict for multipart
+                "created_by": "TestUser001",
+                "comment": "TestComment",
+                "file": uploaded_file,  # Include file in data dict for multipart
             },
-            format='multipart'
+            format="multipart",
         )
 
-        self.assertEqual(add_samplesheet_response.status_code, 200, f"Ok status response is expected, got {add_samplesheet_response.status_code}: {add_samplesheet_response.data}")
-        self.assertEqual(add_samplesheet_response.data["detail"], "Samplesheet added successfully", "Detail is expected")
+        self.assertEqual(
+            add_samplesheet_response.status_code,
+            200,
+            f"Ok status response is expected, got {add_samplesheet_response.status_code}: {add_samplesheet_response.data}",
+        )
+        self.assertEqual(
+            add_samplesheet_response.data["detail"],
+            "Samplesheet added successfully",
+            "Detail is expected",
+        )
 
         # Get the created sequence_run (it's created by the add_samplesheet action)
-        sequence_run = Sequence.objects.filter(
-            instrument_run_id="190101_A01052_0001_BH5LY7ACGT"
-        ).exclude(sequence_run_id="r.AAAAAA").first()
-        self.assertIsNotNone(sequence_run, "Sequence run should be created by add_samplesheet action")
+        sequence_run = (
+            Sequence.objects.filter(instrument_run_id="190101_A01052_0001_BH5LY7ACGT")
+            .exclude(sequence_run_id="r.AAAAAA")
+            .first()
+        )
+        self.assertIsNotNone(
+            sequence_run, "Sequence run should be created by add_samplesheet action"
+        )
 
         # test get samplesheet
-        get_samplesheet_response = self.client.get(f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/")
-        self.assertEqual(get_samplesheet_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}")
-        self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected")
-        self.assertEqual(get_samplesheet_response.data["sample_sheet_content_original"], samplesheet_content.decode('utf-8'), "Sample sheet content is expected")
+        get_samplesheet_response = self.client.get(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/"
+        )
+        self.assertEqual(
+            get_samplesheet_response.status_code,
+            200,
+            f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}",
+        )
+        self.assertEqual(
+            get_samplesheet_response.data["sample_sheet_name"],
+            "standard-sheet-with-settings.csv",
+            "Sample sheet name is expected",
+        )
+        self.assertEqual(
+            get_samplesheet_response.data["sample_sheet_content_original"],
+            samplesheet_content.decode("utf-8"),
+            "Sample sheet content is expected",
+        )
 
         # test get samplesheet by ss orcabus_id
         ss_orcabus_id = get_samplesheet_response.data["orcabus_id"]
-        get_samplesheet_response = self.client.get(f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/{ss_orcabus_id}/")
-        self.assertEqual(get_samplesheet_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}")
-        self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected"),
+        get_samplesheet_response = self.client.get(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/sample_sheet/{ss_orcabus_id}/"
+        )
+        self.assertEqual(
+            get_samplesheet_response.status_code,
+            200,
+            f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}",
+        )
+        self.assertEqual(
+            get_samplesheet_response.data["sample_sheet_name"],
+            "standard-sheet-with-settings.csv",
+            "Sample sheet name is expected",
+        ),
 
         # test samplesheet api and cheksum query
         ss_orcabus_id = get_samplesheet_response.data["orcabus_id"]
-        get_samplesheet_response = self.client.get(f"{self.sample_sheet_endpoint}/{ss_orcabus_id}/")
-        self.assertEqual(get_samplesheet_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}")
-        self.assertEqual(get_samplesheet_response.data["sample_sheet_name"], "standard-sheet-with-settings.csv", "Sample sheet name is expected")
-        self.assertEqual(get_samplesheet_response.data["sample_sheet_content_original"], samplesheet_content.decode('utf-8'), "Sample sheet content is expected")
+        get_samplesheet_response = self.client.get(
+            f"{self.sample_sheet_endpoint}/{ss_orcabus_id}/"
+        )
+        self.assertEqual(
+            get_samplesheet_response.status_code,
+            200,
+            f"Ok status response is expected, got {get_samplesheet_response.status_code}: {get_samplesheet_response.data}",
+        )
+        self.assertEqual(
+            get_samplesheet_response.data["sample_sheet_name"],
+            "standard-sheet-with-settings.csv",
+            "Sample sheet name is expected",
+        )
+        self.assertEqual(
+            get_samplesheet_response.data["sample_sheet_content_original"],
+            samplesheet_content.decode("utf-8"),
+            "Sample sheet content is expected",
+        )
 
         # test samplesheet api and cheksum query checksum
-        sample_sheet_content_original = get_samplesheet_response.data["sample_sheet_content_original"]
-        ss_checksum = hashlib.sha256(sample_sheet_content_original.encode('utf-8')).hexdigest()
-        get_samplesheet_checksum_response = self.client.get(f"{self.sample_sheet_endpoint}/?checksum={ss_checksum}&checksumType=sha256")
-        self.assertEqual(get_samplesheet_checksum_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_checksum_response.status_code}: {get_samplesheet_checksum_response.data}")
-        self.assertEqual(len(get_samplesheet_checksum_response.data), 2, "One result is expected")
+        sample_sheet_content_original = get_samplesheet_response.data[
+            "sample_sheet_content_original"
+        ]
+        ss_checksum = hashlib.sha256(
+            sample_sheet_content_original.encode("utf-8")
+        ).hexdigest()
+        get_samplesheet_checksum_response = self.client.get(
+            f"{self.sample_sheet_endpoint}/?checksum={ss_checksum}&checksumType=sha256"
+        )
+        self.assertEqual(
+            get_samplesheet_checksum_response.status_code,
+            200,
+            f"Ok status response is expected, got {get_samplesheet_checksum_response.status_code}: {get_samplesheet_checksum_response.data}",
+        )
+        self.assertEqual(
+            len(get_samplesheet_checksum_response.data), 2, "One result is expected"
+        )
 
         # test samplesheet api and cheksum query checksum by sequence run id
-        get_samplesheet_checksum_response = self.client.get(f"{self.sample_sheet_endpoint}/?sequenceRunId=r.AAAAAA")
-        self.assertEqual(get_samplesheet_checksum_response.status_code, 200, f"Ok status response is expected, got {get_samplesheet_checksum_response.status_code}: {get_samplesheet_checksum_response.data}")
-        self.assertEqual(len(get_samplesheet_checksum_response.data), 1, "One result is expected")
+        get_samplesheet_checksum_response = self.client.get(
+            f"{self.sample_sheet_endpoint}/?sequenceRunId=r.AAAAAA"
+        )
+        self.assertEqual(
+            get_samplesheet_checksum_response.status_code,
+            200,
+            f"Ok status response is expected, got {get_samplesheet_checksum_response.status_code}: {get_samplesheet_checksum_response.data}",
+        )
+        self.assertEqual(
+            len(get_samplesheet_checksum_response.data), 1, "One result is expected"
+        )

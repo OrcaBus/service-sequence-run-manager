@@ -14,6 +14,7 @@ from libumccr import libjson
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 def event_handler(event, context):
     """
     This lambda function is used to handle the sample sheet event from the event bus

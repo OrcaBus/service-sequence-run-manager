@@ -93,7 +93,9 @@ class ICAService:
     """
 
     def __init__(self):
-        assert os.environ.get("ICAV2_ACCESS_TOKEN_SECRET_ID", None), "ICAV2_ACCESS_TOKEN_SECRET_ID is not set"
+        assert os.environ.get(
+            "ICAV2_ACCESS_TOKEN_SECRET_ID", None
+        ), "ICAV2_ACCESS_TOKEN_SECRET_ID is not set"
         try:
             ICAV2_ACCESS_TOKEN = libsm.get_secret(
                 os.environ.get("ICAV2_ACCESS_TOKEN_SECRET_ID")
@@ -103,7 +105,9 @@ class ICAService:
             raise
 
         if not ICAV2_ACCESS_TOKEN:
-            raise ValueError("ICAV2_ACCESS_TOKEN retrieved from Secret Manager is empty")
+            raise ValueError(
+                "ICAV2_ACCESS_TOKEN retrieved from Secret Manager is empty"
+            )
 
         self._configuration = Configuration(
             host=os.environ.get("ICAV2_BASE_URL", DEFAULT_ICAV2_BASE_URL),

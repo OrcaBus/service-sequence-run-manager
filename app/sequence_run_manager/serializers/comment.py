@@ -1,6 +1,10 @@
 from sequence_run_manager.models import Comment
-from sequence_run_manager.serializers.base import SerializersBase, OrcabusIdSerializerMetaMixin
+from sequence_run_manager.serializers.base import (
+    SerializersBase,
+    OrcabusIdSerializerMetaMixin,
+)
 from rest_framework import serializers
+
 
 class CommentBaseSerializer(SerializersBase):
     pass
@@ -11,9 +15,11 @@ class CommentSerializer(CommentBaseSerializer):
         model = Comment
         fields = "__all__"
 
+
 class CommentCreateRequestSerializer(serializers.Serializer):
     comment = serializers.CharField(required=True, allow_blank=False)
     created_by = serializers.CharField(required=True, allow_blank=False, max_length=255)
+
 
 class CommentUpdateRequestSerializer(serializers.Serializer):
     comment = serializers.CharField(required=True, allow_blank=False)

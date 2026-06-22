@@ -67,7 +67,13 @@ class SequenceStatus(models.TextChoices):
         """
         Check if the status is terminal (i.e. SUCCEEDED, FAILED, ABORTED, RESOLVED, DEPRECATED)
         """
-        return value in [cls.SUCCEEDED.value, cls.FAILED.value, cls.ABORTED.value, cls.RESOLVED.value, cls.DEPRECATED.value]
+        return value in [
+            cls.SUCCEEDED.value,
+            cls.FAILED.value,
+            cls.ABORTED.value,
+            cls.RESOLVED.value,
+            cls.DEPRECATED.value,
+        ]
 
 
 class SequenceManager(OrcaBusBaseManager):
@@ -91,17 +97,21 @@ class Sequence(OrcaBusBaseModel):
         # ]
         pass
 
-    orcabus_id = OrcaBusIdField(primary_key=True, prefix='seq')
+    orcabus_id = OrcaBusIdField(primary_key=True, prefix="seq")
 
     # mandatory non-nullable base fields
-    sequence_run_id = models.CharField(max_length=255, null=False, blank=False)  # unique key, legacy `run_id`
+    sequence_run_id = models.CharField(
+        max_length=255, null=False, blank=False
+    )  # unique key, legacy `run_id`
 
     # NOTE: sample_sheet_name is nullable in BSSH event, but we use UNKNOWN_VALUE to represent the absence of sample sheet
     # https://github.com/OrcaBus/service-sequence-run-manager/issues/28
     sample_sheet_name = models.CharField(max_length=255, null=True, blank=True)
 
     # nullable base fields only for fake sequence runs (refer: https://github.com/umccr/orcabus/issues/947)
-    status = models.CharField(choices=SequenceStatus.choices, max_length=255, null=True, blank=True)
+    status = models.CharField(
+        choices=SequenceStatus.choices, max_length=255, null=True, blank=True
+    )
     start_time = models.DateTimeField(null=True, blank=True)
 
     # nullable base fields for sequence runs info from bssh events
@@ -109,15 +119,23 @@ class Sequence(OrcaBusBaseModel):
     ica_project_id = models.CharField(max_length=255, null=True, blank=True)
     api_url = models.TextField(null=True, blank=True)
     end_time = models.DateTimeField(null=True, blank=True)
-    run_volume_name = models.TextField(null=True, blank=True)  # legacy `gds_volume_name`
-    run_folder_path = models.TextField(null=True, blank=True)  # legacy `gds_folder_path`, nullable as ICAv2 event upgrade
-    run_data_uri = models.TextField(null=True, blank=True)  # must be absolute path, including URI scheme/protocol
+    run_volume_name = models.TextField(
+        null=True, blank=True
+    )  # legacy `gds_volume_name`
+    run_folder_path = models.TextField(
+        null=True, blank=True
+    )  # legacy `gds_folder_path`, nullable as ICAv2 event upgrade
+    run_data_uri = models.TextField(
+        null=True, blank=True
+    )  # must be absolute path, including URI scheme/protocol
 
     # optional fields -- business look up keys
     instrument_run_id = models.CharField(max_length=255, null=True, blank=True)
     reagent_barcode = models.CharField(max_length=255, null=True, blank=True)
     flowcell_barcode = models.CharField(max_length=255, null=True, blank=True)
-    sequence_run_name = models.CharField(max_length=255, null=True, blank=True)  # legacy `name`
+    sequence_run_name = models.CharField(
+        max_length=255, null=True, blank=True
+    )  # legacy `name`
     experiment_name = models.CharField(max_length=255, null=True, blank=True)
 
     # run_config = models.JSONField(null=True, blank=True)  # TODO could be it's own model
@@ -138,13 +156,17 @@ class Sequence(OrcaBusBaseModel):
         """
         Get all libraries associated with the sequence
         """
-        return list(LibraryAssociation.objects.filter(sequence=self).values_list('library_id', flat=True))
+        return list(
+            LibraryAssociation.objects.filter(sequence=self).values_list(
+                "library_id", flat=True
+            )
+        )
 
     def get_latest_state(self):
         """
         Get the latest state for the sequence
         """
-        return self.states.order_by('-timestamp').first()
+        return self.states.order_by("-timestamp").first()
 
 
 class LibraryAssociationManager(OrcaBusBaseManager):

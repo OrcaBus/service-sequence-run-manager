@@ -1,5 +1,7 @@
 from sequence_run_manager.tests.factories import TestConstant
 import hashlib
+
+
 class SequenceRunManagerProcFactory:
     @staticmethod
     def bssh_event_message(mock_run_status: str = "New"):
@@ -50,98 +52,97 @@ class SequenceRunManagerProcFactory:
     @staticmethod
     def mock_bssh_run_details():
         mock_run_details = {
-                "Id": "r.ACGTlKjDgEy099ioQOeOWg",
-                "Name": "241024_A00130_0336_00000000",
-                "ExperimentName": "ExperimentName",
-                "DateCreated": "2024-10-29T23:22:32.0000000Z",
-                "DateModified": "2025-02-23T16:13:22.0000000Z",
-                "Status": "Complete",
-                "UserOwnedBy": { # omit other fields here
-                    "Id": "0000000",
-                },
-                "Instrument": { # omit other fields here
-                    "Id": 1000000,
-                    "Name": "NovaSeq6000-simulator",
-                },
-                "InstrumentRunStatus": "Completed",
-                "FlowcellBarcode": "BARCODEEE",
-                "FlowcellPosition": "B",
-                "LaneAndQcStatus": "QcPassed",
-                "Workflow": "Generate FASTQ",
-                "SampleSheetName": "SampleSheet.V2.XXXXXX.csv",
-                "TotalSize": 1332913376661,
-                "UserUploadedBy": { # omit other fields here
-                    "Id": "0000000",
-                    "Name": "Example Name",
-                },
-                "UploadStatus": "Completed",
-                "DateUploadStarted": "2024-10-29T23:22:33.0000000Z",
-                "DateUploadCompleted": "2024-10-30T01:32:18.0000000Z",
-                "IsArchived": False,
-                "IsZipping": False,
-                "IsZipped": False,
-                "IsUnzipping": False,
-                "Href": "https://api.example.com/v2/runs/0000000",
-                "HrefFiles": "https://api.example.com/v2/runs/0000000/files",
-                "HrefIcaUriFiles": "https://example.com/ica/link/project/xxxxx/data/xxxxx",
-                "HasFilesInIca": True,
-                "Properties": {
-                    "Items": [
-                        {
-                            "Type": "string[]",
-                            "Name": "BaseSpace.LaneQcThresholds.1.Failed",
-                            "Description": "The list of configured thresholds that were evaluated and failed",
-                            "ContentItems": [],
-                            "ItemsDisplayedCount": 0,
-                            "ItemsTotalCount": 0
-                        },# omit other fields here
-
-                        {
-                            "Type": "biosample[]",
-                            "Name": "Input.BioSamples",
-                            "Description": "",
-                            "BioSampleItems": [
-                                { # omit other fields here
-                                    "Id": "0000000",
-                                    "BioSampleName": "LXXXXXXX",
-                                    "Status": "New",
-                                    "LabStatus": "Sequencing"
-                                },
-                            ]
-                        },
-                        {
-                            "Type": "library[]",
-                            "Name": "Input.Libraries",
-                            "Description": "",
-                            "LibraryItems": [
-                                { # omit other fields here
-                                    "Id": "0000000",
-                                    "Name": "L06789ABCD",
-                                    "Status": "Active"
-                                },
-                                { # omit other fields here
-                                    "Id": "1111111111",
-                                    "Name": "L01234ABCD",
-                                    "Status": "Active"
-                                }
-                            ]
-                        },
-                        {
-                            "Type": "librarypool[]",
-                            "Name": "Input.LibraryPools",
-                            "Description": "",
-                            "LibraryPoolItems": [
-                                { # omit other fields here
-                                    "Id": "0000000",
-                                    "UserPoolId": "Pool_XXXXX_000",
-                                    "Status": "Active"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "V1Pre3Id": "1234567890"
-            }
+            "Id": "r.ACGTlKjDgEy099ioQOeOWg",
+            "Name": "241024_A00130_0336_00000000",
+            "ExperimentName": "ExperimentName",
+            "DateCreated": "2024-10-29T23:22:32.0000000Z",
+            "DateModified": "2025-02-23T16:13:22.0000000Z",
+            "Status": "Complete",
+            "UserOwnedBy": {  # omit other fields here
+                "Id": "0000000",
+            },
+            "Instrument": {  # omit other fields here
+                "Id": 1000000,
+                "Name": "NovaSeq6000-simulator",
+            },
+            "InstrumentRunStatus": "Completed",
+            "FlowcellBarcode": "BARCODEEE",
+            "FlowcellPosition": "B",
+            "LaneAndQcStatus": "QcPassed",
+            "Workflow": "Generate FASTQ",
+            "SampleSheetName": "SampleSheet.V2.XXXXXX.csv",
+            "TotalSize": 1332913376661,
+            "UserUploadedBy": {  # omit other fields here
+                "Id": "0000000",
+                "Name": "Example Name",
+            },
+            "UploadStatus": "Completed",
+            "DateUploadStarted": "2024-10-29T23:22:33.0000000Z",
+            "DateUploadCompleted": "2024-10-30T01:32:18.0000000Z",
+            "IsArchived": False,
+            "IsZipping": False,
+            "IsZipped": False,
+            "IsUnzipping": False,
+            "Href": "https://api.example.com/v2/runs/0000000",
+            "HrefFiles": "https://api.example.com/v2/runs/0000000/files",
+            "HrefIcaUriFiles": "https://example.com/ica/link/project/xxxxx/data/xxxxx",
+            "HasFilesInIca": True,
+            "Properties": {
+                "Items": [
+                    {
+                        "Type": "string[]",
+                        "Name": "BaseSpace.LaneQcThresholds.1.Failed",
+                        "Description": "The list of configured thresholds that were evaluated and failed",
+                        "ContentItems": [],
+                        "ItemsDisplayedCount": 0,
+                        "ItemsTotalCount": 0,
+                    },  # omit other fields here
+                    {
+                        "Type": "biosample[]",
+                        "Name": "Input.BioSamples",
+                        "Description": "",
+                        "BioSampleItems": [
+                            {  # omit other fields here
+                                "Id": "0000000",
+                                "BioSampleName": "LXXXXXXX",
+                                "Status": "New",
+                                "LabStatus": "Sequencing",
+                            },
+                        ],
+                    },
+                    {
+                        "Type": "library[]",
+                        "Name": "Input.Libraries",
+                        "Description": "",
+                        "LibraryItems": [
+                            {  # omit other fields here
+                                "Id": "0000000",
+                                "Name": "L06789ABCD",
+                                "Status": "Active",
+                            },
+                            {  # omit other fields here
+                                "Id": "1111111111",
+                                "Name": "L01234ABCD",
+                                "Status": "Active",
+                            },
+                        ],
+                    },
+                    {
+                        "Type": "librarypool[]",
+                        "Name": "Input.LibraryPools",
+                        "Description": "",
+                        "LibraryPoolItems": [
+                            {  # omit other fields here
+                                "Id": "0000000",
+                                "UserPoolId": "Pool_XXXXX_000",
+                                "Status": "Active",
+                            }
+                        ],
+                    },
+                ]
+            },
+            "V1Pre3Id": "1234567890",
+        }
         return mock_run_details
 
     @staticmethod
@@ -227,7 +228,7 @@ class SequenceRunManagerProcFactory:
                     "index2": "TTTTTTTT",
                     "sample_project": "SampleProject",
                 },
-            ]
+            ],
         }
         return mock_sample_sheet
 
@@ -235,18 +236,18 @@ class SequenceRunManagerProcFactory:
     def mock_sample_sheet_change_event_message():
         mock_instrument_run_id = TestConstant.instrument_run_id.value
         mock_time_stamp = "2024-11-02T21:58:13.7451620Z"
-        base64_encoded_gz_content = "H4sIAAhBbmgC/1WPbWsCMQzH3/ezdLKWu03Yq1pZdagMLYMhIuEuSqHXurbq/PaLOvdAQ5pfmvyTLucIbV6xRJfQp8Zj5qIWF5Z/2IUWP28F/SvKH2TLEdVjIp19mEGHfAjHHMPdYPowWYtqCknW1JRL2ncYij3tkM/iARb4wTbO43NMHZQ3TNnFwCUJDhrfxHDAVNYLLMWFLW0ZiZNr8XvwO232NO6f7RyyHDflCAlvOlVP9h7/aw2hwIp5CMgvf7h6yTN0O4/jlgmurVFWG8uNNlpZZfnkdf4i6/tKCnpW2tIxiv+mJfsCIvh/8UcBAAA=" # pragma: allowlist-secret
+        base64_encoded_gz_content = "H4sIAAhBbmgC/1WPbWsCMQzH3/ezdLKWu03Yq1pZdagMLYMhIuEuSqHXurbq/PaLOvdAQ5pfmvyTLucIbV6xRJfQp8Zj5qIWF5Z/2IUWP28F/SvKH2TLEdVjIp19mEGHfAjHHMPdYPowWYtqCknW1JRL2ncYij3tkM/iARb4wTbO43NMHZQ3TNnFwCUJDhrfxHDAVNYLLMWFLW0ZiZNr8XvwO232NO6f7RyyHDflCAlvOlVP9h7/aw2hwIp5CMgvf7h6yTN0O4/jlgmurVFWG8uNNlpZZfnkdf4i6/tKCnpW2tIxiv+mJfsCIvh/8UcBAAA="  # pragma: allowlist-secret
 
         mock_event_message = {
-                "instrumentRunId": mock_instrument_run_id,
-                "timeStamp": mock_time_stamp,
-                "sampleSheetName": "SampleSheet.V2.csv",
-                "samplesheetBase64gz": base64_encoded_gz_content,
-                "comment": {
-                    "comment": "comment",
-                    "createdBy": "created_by",
-                }
-            }
+            "instrumentRunId": mock_instrument_run_id,
+            "timeStamp": mock_time_stamp,
+            "sampleSheetName": "SampleSheet.V2.csv",
+            "samplesheetBase64gz": base64_encoded_gz_content,
+            "comment": {
+                "comment": "comment",
+                "createdBy": "created_by",
+            },
+        }
         orcabus_event_message = {
             "version": "0",
             "id": "f8c3de3d-1fea-4d7c-a8b0-29f63c4c3454",  # Random UUID
@@ -256,15 +257,19 @@ class SequenceRunManagerProcFactory:
             "time": "2024-11-02T21:58:22Z",
             "region": "ap-southeast-2",
             "resources": [],
-            "detail": mock_event_message
+            "detail": mock_event_message,
         }
         return orcabus_event_message
 
     @staticmethod
     def mock_workflow_run_update_event_message():
         mock_instrument_run_id = TestConstant.instrument_run_id.value
-        mock_sample_sheet_content = SequenceRunManagerProcFactory.mock_bssh_sample_sheet()
-        mock_samplesheet_checksum = hashlib.md5(mock_sample_sheet_content.encode('utf-8')).hexdigest()
+        mock_sample_sheet_content = (
+            SequenceRunManagerProcFactory.mock_bssh_sample_sheet()
+        )
+        mock_samplesheet_checksum = hashlib.md5(
+            mock_sample_sheet_content.encode("utf-8")
+        ).hexdigest()
         mock_samplesheet_checksum_type = "md5"
         mock_samplesheet_uri = "icav2://222222_A01052_1234_BHVJJJJJJ/sample_sheet.csv"
         mock_detail = {
@@ -280,9 +285,9 @@ class SequenceRunManagerProcFactory:
                     },
                     "inputs": {
                         "sampleSheetUri": mock_samplesheet_uri,
-                    }
+                    },
                 }
-            }
+            },
         }
         mock_event_message = {
             "version": "0",
@@ -293,7 +298,7 @@ class SequenceRunManagerProcFactory:
             "time": "2024-11-02T21:58:22Z",
             "region": "ap-southeast-2",
             "resources": [],
-            "detail": mock_detail
+            "detail": mock_detail,
         }
         return mock_event_message
 
@@ -308,7 +313,7 @@ class SequenceRunManagerProcFactory:
             "instrumentRunId": mock_instrument_run_id,
             "sequenceRunId": mock_sequence_run_id,
             "timeStamp": mock_time_stamp,
-            "linkedLibraries": mock_linked_libraries
+            "linkedLibraries": mock_linked_libraries,
         }
 
         orcabus_event_message = {
@@ -320,6 +325,6 @@ class SequenceRunManagerProcFactory:
             "time": "2024-11-02T21:58:22Z",
             "region": "ap-southeast-2",
             "resources": [],
-            "detail": mock_event_message
+            "detail": mock_event_message,
         }
         return orcabus_event_message

@@ -3,31 +3,35 @@ from django.core.validators import RegexValidator
 from django.db import models
 
 ULID_REGEX_STR = r"[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}"
-ulid_validator = RegexValidator(regex=ULID_REGEX_STR,
-                                message='ULID is expected to be 26 characters long',
-                                code='invalid_orcabus_id')
+ulid_validator = RegexValidator(
+    regex=ULID_REGEX_STR,
+    message="ULID is expected to be 26 characters long",
+    code="invalid_orcabus_id",
+)
 
 
 def get_ulid() -> str:
     return ulid.new().str
 
+
 def sanitize_orcabus_id(orcabus_id: str) -> str:
     return orcabus_id[-26:]
+
 
 class UlidField(models.CharField):
     description = "An OrcaBus internal ID (ULID)"
 
     def __init__(self, *args, **kwargs):
-        kwargs['max_length'] = 26  # ULID length
-        kwargs['validators'] = [ulid_validator]
-        kwargs['default'] = get_ulid
+        kwargs["max_length"] = 26  # ULID length
+        kwargs["validators"] = [ulid_validator]
+        kwargs["default"] = get_ulid
         super().__init__(*args, **kwargs)
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
         del kwargs["max_length"]
-        del kwargs['validators']
-        del kwargs['default']
+        del kwargs["validators"]
+        del kwargs["default"]
         return name, path, args, kwargs
 
 
@@ -44,7 +48,7 @@ class OrcaBusIdField(UlidField):
 
     description = "An OrcaBus internal ID (based on ULID)"
 
-    def __init__(self, prefix='', *args, **kwargs):
+    def __init__(self, prefix="", *args, **kwargs):
         self.prefix = prefix
         super().__init__(*args, **kwargs)
 
@@ -53,7 +57,7 @@ class OrcaBusIdField(UlidField):
         return super().non_db_attrs + ("prefix",)
 
     def from_db_value(self, value, expression, connection):
-        if value and self.prefix != '':
+        if value and self.prefix != "":
             return f"{self.prefix}.{value}"
         else:
             return value

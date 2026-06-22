@@ -5,15 +5,17 @@ from django.utils import timezone
 
 from sequence_run_manager.models.sequence import Sequence, SequenceStatus
 
+
 class TestConstant(Enum):
     sequence_run_id = "r.ACGTlKjDgEy099ioQOeOWg"
     instrument_run_id = "200508_A01052_0001_BH5LY7ACGT"
+
 
 class SequenceFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Sequence
 
-    sequence_run_id = TestConstant.sequence_run_id.value # unique key, legacy `run_id`
+    sequence_run_id = TestConstant.sequence_run_id.value  # unique key, legacy `run_id`
     #  status is not nullable, so we need to set it to a valid value
     status = SequenceStatus.STARTED
     start_time = timezone.now()

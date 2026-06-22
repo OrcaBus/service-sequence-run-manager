@@ -11,17 +11,20 @@ import hashlib
 import zlib
 
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 class SampleSheetViewSet(ViewSet):
     """
     ViewSet for retrieving sample sheets nested under sequence_run
     """
-    pagination_class = None
-    lookup_value_regex = "[^/]+" # to allow id prefix
-    lookup_field = 'orcabus_id'
 
-    supported_checksum_types = ['md5', 'crc32', 'sha256']
+    pagination_class = None
+    lookup_value_regex = "[^/]+"  # to allow id prefix
+    lookup_field = "orcabus_id"
+
+    supported_checksum_types = ["md5", "crc32", "sha256"]
 
     def _validate_checksum_type(self, checksum_type: str) -> bool:
         """
@@ -33,7 +36,9 @@ class SampleSheetViewSet(ViewSet):
         """
         return checksum_type in self.supported_checksum_types
 
-    def _calculate_checksum(self, sample_sheet_content_original: str, checksum_type: str = "sha256") -> str:
+    def _calculate_checksum(
+        self, sample_sheet_content_original: str, checksum_type: str = "sha256"
+    ) -> str:
         """
         Calculate checksum from sample sheet content.
         Args:
@@ -45,41 +50,43 @@ class SampleSheetViewSet(ViewSet):
         if not sample_sheet_content_original:
             return ""
         try:
-            content_bytes = sample_sheet_content_original.encode('utf-8')
+            content_bytes = sample_sheet_content_original.encode("utf-8")
             if checksum_type.lower() == "md5":
                 return hashlib.md5(content_bytes).hexdigest()
             elif checksum_type.lower() == "crc32":
                 # CRC32 returns a signed integer, convert to unsigned and then to hex
-                crc32_value = zlib.crc32(content_bytes) & 0xffffffff
-                return format(crc32_value, '08x')
+                crc32_value = zlib.crc32(content_bytes) & 0xFFFFFFFF
+                return format(crc32_value, "08x")
             else:  # default to sha256
                 return hashlib.sha256(content_bytes).hexdigest()
         except Exception as e:
-            logger.warning(f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}")
+            logger.warning(
+                f"Failed to calculate {checksum_type} checksum from sample sheet content: {str(e)}"
+            )
             return ""
 
     @extend_schema(
         parameters=[
             OpenApiParameter(
-                name='checksum',
+                name="checksum",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Checksum value to search for',
+                description="Checksum value to search for",
                 required=False,
             ),
             OpenApiParameter(
-                name='checksumType',
+                name="checksumType",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Type of checksum: md5 or crc32',
+                description="Type of checksum: md5 or crc32",
                 required=False,
                 enum=["md5", "crc32", "sha256"],
             ),
             OpenApiParameter(
-                name='sequenceRunId',
+                name="sequenceRunId",
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
-                description='Sequence run ID to filter by (will be converted to sequence_run_id by camel-case middleware)',
+                description="Sequence run ID to filter by (will be converted to sequence_run_id by camel-case middleware)",
                 required=False,
             ),
         ],
@@ -87,7 +94,7 @@ class SampleSheetViewSet(ViewSet):
             200: SampleSheetSerializer(many=True),
         },
         operation_id="list_sample_sheets",
-        description="List sample sheets with optional filtering by checksum and sequenceRunId"
+        description="List sample sheets with optional filtering by checksum and sequenceRunId",
     )
     def list(self, request, *args, **kwargs):
         """
@@ -105,33 +112,36 @@ class SampleSheetViewSet(ViewSet):
 
         Returns a list of matching sample sheets, or empty list if no matches found.
         """
-        queryset = SampleSheet.objects.filter(association_status='active')
+        queryset = SampleSheet.objects.filter(association_status="active")
 
         # Filter by sequence_run_id, checksum and checksum_type if provided
-        sequence_run_id = request.query_params.get('sequence_run_id')
-        checksum = request.query_params.get('checksum')
-        checksum_type_param = request.query_params.get('checksum_type', 'sha256')
-        checksum_type = checksum_type_param.lower() if checksum_type_param else 'sha256'
+        sequence_run_id = request.query_params.get("sequence_run_id")
+        checksum = request.query_params.get("checksum")
+        checksum_type_param = request.query_params.get("checksum_type", "sha256")
+        checksum_type = checksum_type_param.lower() if checksum_type_param else "sha256"
 
         if not (sequence_run_id or (checksum and checksum_type)):
             return Response(
-                {"detail": "At least one of sequenceRunId, or  checksum and checksumType is required."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": "At least one of sequenceRunId, or  checksum and checksumType is required."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if checksum and checksum_type:
             if not self._validate_checksum_type(checksum_type):
                 return Response(
-                    {"detail": f"Invalid checksumType '{checksum_type}'. Must be one of: {', '.join(self.supported_checksum_types)}."},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {
+                        "detail": f"Invalid checksumType '{checksum_type}'. Must be one of: {', '.join(self.supported_checksum_types)}."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             # Filter sample sheets by matching checksum
             matching_sample_sheets = []
             for sample_sheet in queryset:
                 calculated_checksum = self._calculate_checksum(
-                    sample_sheet.sample_sheet_content_original or "",
-                    checksum_type
+                    sample_sheet.sample_sheet_content_original or "", checksum_type
                 )
                 if calculated_checksum.lower() == checksum.lower():
                     matching_sample_sheets.append(sample_sheet)
@@ -143,8 +153,10 @@ class SampleSheetViewSet(ViewSet):
                 sequence = Sequence.objects.get(sequence_run_id=sequence_run_id)
             except Sequence.DoesNotExist:
                 return Response(
-                    {"detail": f"Sequence run with sequence_run_id '{sequence_run_id}' not found."},
-                    status=status.HTTP_404_NOT_FOUND
+                    {
+                        "detail": f"Sequence run with sequence_run_id '{sequence_run_id}' not found."
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
                 )
             queryset = queryset.filter(sequence=sequence)
 
@@ -155,17 +167,21 @@ class SampleSheetViewSet(ViewSet):
     @extend_schema(
         responses={
             200: SampleSheetSerializer,
-            404: OpenApiResponse(description="Sample sheet not found.")
+            404: OpenApiResponse(description="Sample sheet not found."),
         },
-        operation_id="get_sample_sheet_by_id"
+        operation_id="get_sample_sheet_by_id",
     )
     def retrieve(self, request, *args, **kwargs):
         """
         Returns a SampleSheet by its orcabus_id.
         GET /api/v1/sample_sheet/{orcabus_id}
         """
-        orcabus_id = kwargs.get('orcabus_id') or kwargs.get('pk')
+        orcabus_id = kwargs.get("orcabus_id") or kwargs.get("pk")
         if not orcabus_id:
-            return Response({"detail": "orcabus_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "orcabus_id is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
         sample_sheet = get_object_or_404(SampleSheet, orcabus_id=orcabus_id)
-        return Response(SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK)
+        return Response(
+            SampleSheetSerializer(sample_sheet).data, status=status.HTTP_200_OK
+        )

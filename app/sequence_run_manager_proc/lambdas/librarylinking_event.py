@@ -14,6 +14,7 @@ from libumccr import libjson
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 def event_handler(event, context):
     """
     This lambda function is used to handle the library linking event from the event bus
@@ -45,4 +46,6 @@ def event_handler(event, context):
     logger.info(libjson.dumps(event))
     logger.info("Start processing library linking event ....")
 
-    sequence_library_srv.update_sequence_run_libraries_linking_from_srllc_event(event["detail"])
+    sequence_library_srv.update_sequence_run_libraries_linking_from_srllc_event(
+        event["detail"]
+    )

@@ -60,7 +60,10 @@ def emit_srm_api_event(event):
     """
 
     # construct event
-    supported_event_types = ["SequenceRunSampleSheetChange", "SequenceRunLibraryLinkingChange"]
+    supported_event_types = [
+        "SequenceRunSampleSheetChange",
+        "SequenceRunLibraryLinkingChange",
+    ]
     event_bus_name = os.environ.get("EVENT_BUS_NAME", None)
 
     if event_bus_name is None:
@@ -71,7 +74,6 @@ def emit_srm_api_event(event):
     if event_type not in supported_event_types:
         logger.error(f"Unsupported event type: {event_type}")
         return
-
 
     event_entry = None
     match event_type:
@@ -91,7 +93,9 @@ def emit_srm_api_event(event):
                 instrument_run_id=event["instrumentRunId"],
                 sequence_run_id=event["sequenceRunId"],
                 linked_libraries=event["linkedLibraries"],
-                timestamp=event["timeStamp"] if "timeStamp" in event else timezone.now(),
+                timestamp=(
+                    event["timeStamp"] if "timeStamp" in event else timezone.now()
+                ),
             )
             event_entry = library_linking_domain.to_put_events_request_entry(
                 event_bus_name=event_bus_name,
@@ -105,7 +109,9 @@ def emit_srm_api_event(event):
     if event_entry is not None:
         try:
             response = libeb.emit_event(event_entry)
-            logger.info(f"Sent a {event_type} event to event bus {event_bus_name}: {event_entry}")
+            logger.info(
+                f"Sent a {event_type} event to event bus {event_bus_name}: {event_entry}"
+            )
             return response
         except Exception as e:
             logger.error(f"Failed to emit event: {e}")

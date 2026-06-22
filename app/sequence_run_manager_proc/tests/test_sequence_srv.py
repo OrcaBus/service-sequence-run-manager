@@ -4,6 +4,7 @@ from sequence_run_manager_proc.domain.sequence import SequenceDomain
 from sequence_run_manager_proc.services import sequence_srv
 from sequence_run_manager_proc.tests.case import logger, SequenceRunProcUnitTestCase
 
+
 class SequenceRunSrvUnitTests(SequenceRunProcUnitTestCase):
     def setUp(self) -> None:
         super(SequenceRunSrvUnitTests, self).setUp()
@@ -27,11 +28,8 @@ class SequenceRunSrvUnitTests(SequenceRunProcUnitTestCase):
             "flowcellBarcode": "bar",
             "sampleSheetName": "SampleSheet.csv",
             "apiUrl": f"https://bssh.dev/api/v1/runs/{TestConstant.sequence_run_id.value}",
-            'v1pre3Id': '1234567890',
-            "acl": [
-                "wid:12345678-debe-3f9f-8b92-21244f46822c",
-                "tid:Yxmm......"
-            ],
+            "v1pre3Id": "1234567890",
+            "acl": ["wid:12345678-debe-3f9f-8b92-21244f46822c", "tid:Yxmm......"],
             "icaProjectId": "12345678-53ba-47a5-854d-e6b53101adb7",
         }
         seq_domain: SequenceDomain = (
@@ -42,9 +40,7 @@ class SequenceRunSrvUnitTests(SequenceRunProcUnitTestCase):
         seq_in_db: Sequence = Sequence.objects.get(
             sequence_run_id=TestConstant.sequence_run_id.value
         )
-        self.assertEqual(
-            seq_domain.sequence.sequence_run_id, seq_in_db.sequence_run_id
-        )
+        self.assertEqual(seq_domain.sequence.sequence_run_id, seq_in_db.sequence_run_id)
         self.assertTrue(
             seq_domain.status_has_changed
         )  # assert Sequence Run Status has changed True
@@ -69,18 +65,18 @@ class SequenceRunSrvUnitTests(SequenceRunProcUnitTestCase):
                     "gdsFolderPath": mock_seq.run_folder_path,
                     "gdsVolumeName": mock_seq.run_volume_name,
                     "status": "New",
-                    'apiUrl': 'https://bssh.dev/api/v1/runs/r.ACGTlKjDgEy099ioQOeOWg',
-                    'v1pre3Id': '1234567890',
+                    "apiUrl": "https://bssh.dev/api/v1/runs/r.ACGTlKjDgEy099ioQOeOWg",
+                    "v1pre3Id": "1234567890",
                     "acl": [
                         "wid:12345678-debe-3f9f-8b92-21244f46822c",
-                        "tid:Yxmm......"
+                        "tid:Yxmm......",
                     ],
                     "icaProjectId": "12345678-53ba-47a5-854d-e6b53101adb7",
-                    'apiUrl': 'https://bssh.dev/api/v1/runs/r.ACGTlKjDgEy099ioQOeOWg',
-                    'v1pre3Id': '1234567890',
+                    "apiUrl": "https://bssh.dev/api/v1/runs/r.ACGTlKjDgEy099ioQOeOWg",
+                    "v1pre3Id": "1234567890",
                     "acl": [
                         "wid:12345678-debe-3f9f-8b92-21244f46822c",
-                        "tid:Yxmm......"
+                        "tid:Yxmm......",
                     ],
                     "icaProjectId": "12345678-53ba-47a5-854d-e6b53101adb7",
                 }

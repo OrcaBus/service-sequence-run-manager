@@ -56,6 +56,7 @@ example event:
                 }
 """
 
+
 class SampleSheetEventUnitTests(SequenceRunProcUnitTestCase):
     def setUp(self) -> None:
         super(SampleSheetEventUnitTests, self).setUp()
@@ -64,12 +65,20 @@ class SampleSheetEventUnitTests(SequenceRunProcUnitTestCase):
         super(SampleSheetEventUnitTests, self).tearDown()
 
     def test_event_handler(self):
-        mock_event_message = SequenceRunManagerProcFactory.mock_sample_sheet_change_event_message()
+        mock_event_message = (
+            SequenceRunManagerProcFactory.mock_sample_sheet_change_event_message()
+        )
 
         _ = samplesheet_event.event_handler(mock_event_message, None)
 
         #  create ghost sequence record
-        seq = Sequence.objects.filter(instrument_run_id=TestConstant.instrument_run_id.value).exclude(sequence_run_id=TestConstant.sequence_run_id.value).first()
+        seq = (
+            Sequence.objects.filter(
+                instrument_run_id=TestConstant.instrument_run_id.value
+            )
+            .exclude(sequence_run_id=TestConstant.sequence_run_id.value)
+            .first()
+        )
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertIsNotNone(seq)
 
@@ -81,15 +90,25 @@ class SampleSheetEventUnitTests(SequenceRunProcUnitTestCase):
         logger.info(f"Found LibraryAssociation record from db: {qs_libraries}")
         self.assertEqual(2, qs_libraries.count())
 
-        qs_comment = Comment.objects.filter(target_id=qs_sample_sheet.first().orcabus_id)
+        qs_comment = Comment.objects.filter(
+            target_id=qs_sample_sheet.first().orcabus_id
+        )
         logger.info(f"Found Comment record from db: {qs_comment}")
         self.assertEqual(1, qs_comment.count())
 
-        mock_event_message = SequenceRunManagerProcFactory.mock_workflow_run_update_event_message()
+        mock_event_message = (
+            SequenceRunManagerProcFactory.mock_workflow_run_update_event_message()
+        )
         _ = samplesheet_event.event_handler(mock_event_message, None)
 
         #  create ghost sequence record
-        seq = Sequence.objects.filter(instrument_run_id=TestConstant.instrument_run_id.value).exclude(sequence_run_id=TestConstant.sequence_run_id.value).first()
+        seq = (
+            Sequence.objects.filter(
+                instrument_run_id=TestConstant.instrument_run_id.value
+            )
+            .exclude(sequence_run_id=TestConstant.sequence_run_id.value)
+            .first()
+        )
         logger.info(f"Found SequenceRun record from db: {seq}")
         self.assertIsNotNone(seq)
 

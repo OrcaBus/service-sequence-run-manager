@@ -10,13 +10,15 @@ class StateManager(OrcaBusBaseManager):
 
 
 class State(OrcaBusBaseModel):
-    orcabus_id = OrcaBusIdField(primary_key=True, prefix='sqs')
+    orcabus_id = OrcaBusIdField(primary_key=True, prefix="sqs")
 
     status = models.CharField(max_length=255, null=False, blank=False)
     timestamp = models.DateTimeField()
     comment = models.CharField(max_length=255, null=True, blank=True)
 
-    sequence = models.ForeignKey(Sequence, on_delete=models.CASCADE, related_name='states')
+    sequence = models.ForeignKey(
+        Sequence, on_delete=models.CASCADE, related_name="states"
+    )
 
     objects = StateManager()
 

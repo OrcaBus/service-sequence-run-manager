@@ -8,15 +8,22 @@ class TargetType(models.TextChoices):
     SEQUENCE = "sequence"
     SAMPLE_SHEET = "sample_sheet"
 
+
 class CommentManager(OrcaBusBaseManager):
     pass
 
 
 class Comment(OrcaBusBaseModel):
-    orcabus_id = OrcaBusIdField(primary_key=True, prefix='cmt')
+    orcabus_id = OrcaBusIdField(primary_key=True, prefix="cmt")
     comment = models.TextField(null=False, blank=False)
-    target_id = OrcaBusIdField(prefix='')  # comment association object id
-    target_type = models.CharField(max_length=255, null=False, blank=False, choices=TargetType.choices, default=TargetType.SEQUENCE)
+    target_id = OrcaBusIdField(prefix="")  # comment association object id
+    target_type = models.CharField(
+        max_length=255,
+        null=False,
+        blank=False,
+        choices=TargetType.choices,
+        default=TargetType.SEQUENCE,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.CharField(max_length=255, null=False, blank=False)
     updated_at = models.DateTimeField(auto_now=True)

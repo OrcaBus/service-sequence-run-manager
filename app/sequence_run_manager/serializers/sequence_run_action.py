@@ -8,5 +8,7 @@ class AddSampleSheetSerializer(serializers.Serializer):
     instrument_run_id = serializers.CharField(
         help_text="The instrument run ID to associate with the sample sheet"
     )
-    created_by = serializers.CharField(help_text="The user who is creating this sample sheet")
+    created_by = serializers.CharField(
+        help_text="The user who is creating this sample sheet"
+    )
     comment = serializers.CharField(help_text="Comment about the sample sheet")

@@ -58,7 +58,9 @@ class SequenceRunProcUnitTestCase(TestCase):
         os.environ["EVENT_BUS_NAME"] = "default"
         os.environ["BASESPACE_ACCESS_TOKEN_SECRET_ID"] = "test"
         os.environ["AWS_DEFAULT_REGION"] = "ap-southeast-2"
-        os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"] = "https://test.sequence.prod.umccr.org"
+        os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"] = (
+            "https://test.sequence.prod.umccr.org"
+        )
 
         # Mock the libsm.get_secret function
         when(libsm).get_secret("test").thenReturn("mock-token")
@@ -68,16 +70,26 @@ class SequenceRunProcUnitTestCase(TestCase):
         mock_bssh_service = mock(BSSHService)
 
         when(mock_bssh_service).get_run_details(...).thenReturn(mock_run_details)
-        when(mock_bssh_service).get_sample_sheet_from_bssh_run_files(...).thenReturn(mock_sample_sheet)
-        when(mock_bssh_service).get_all_sample_sheet_from_bssh_run_files(...).thenReturn([{
-            'name': 'SampleSheet.csv',
-            'content': mock_sample_sheet
-        }])
+        when(mock_bssh_service).get_sample_sheet_from_bssh_run_files(...).thenReturn(
+            mock_sample_sheet
+        )
+        when(mock_bssh_service).get_all_sample_sheet_from_bssh_run_files(
+            ...
+        ).thenReturn([{"name": "SampleSheet.csv", "content": mock_sample_sheet}])
 
         # Use patch to replace the BSSHService class with our mock
-        patcher_seq = patch('sequence_run_manager_proc.services.sequence_srv.BSSHService', return_value=mock_bssh_service)
-        patcher_lib = patch('sequence_run_manager_proc.services.sequence_library_srv.BSSHService', return_value=mock_bssh_service)
-        patcher_sample_sheet = patch('sequence_run_manager_proc.services.sample_sheet_srv.BSSHService', return_value=mock_bssh_service)
+        patcher_seq = patch(
+            "sequence_run_manager_proc.services.sequence_srv.BSSHService",
+            return_value=mock_bssh_service,
+        )
+        patcher_lib = patch(
+            "sequence_run_manager_proc.services.sequence_library_srv.BSSHService",
+            return_value=mock_bssh_service,
+        )
+        patcher_sample_sheet = patch(
+            "sequence_run_manager_proc.services.sample_sheet_srv.BSSHService",
+            return_value=mock_bssh_service,
+        )
 
         self.mock_bssh_class_lib = patcher_lib.start()
         self.mock_bssh_class_seq = patcher_seq.start()

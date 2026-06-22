@@ -7,23 +7,29 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('sequence_run_manager', '0002_alter_sequence_run_folder_path'),
+        ("sequence_run_manager", "0002_alter_sequence_run_folder_path"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='comment',
-            name='orcabus_id',
-            field=sequence_run_manager.fields.OrcaBusIdField(primary_key=True, serialize=False),
+            model_name="comment",
+            name="orcabus_id",
+            field=sequence_run_manager.fields.OrcaBusIdField(
+                primary_key=True, serialize=False
+            ),
         ),
         migrations.AlterField(
-            model_name='sequence',
-            name='orcabus_id',
-            field=sequence_run_manager.fields.OrcaBusIdField(primary_key=True, serialize=False),
+            model_name="sequence",
+            name="orcabus_id",
+            field=sequence_run_manager.fields.OrcaBusIdField(
+                primary_key=True, serialize=False
+            ),
         ),
         migrations.AlterField(
-            model_name='state',
-            name='orcabus_id',
-            field=sequence_run_manager.fields.OrcaBusIdField(primary_key=True, serialize=False),
+            model_name="state",
+            name="orcabus_id",
+            field=sequence_run_manager.fields.OrcaBusIdField(
+                primary_key=True, serialize=False
+            ),
         ),
     ]

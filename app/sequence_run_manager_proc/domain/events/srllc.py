@@ -25,5 +25,5 @@ class AWSEvent(BaseModel):
     time: Optional[datetime] = None
     version: Optional[str] = None
     account: Optional[str] = None
-    detail_type: str = Field(..., alias='detail_type')
+    detail_type: str = Field(..., alias="detail_type")
     detail: SequenceRunLibraryLinkingChange
