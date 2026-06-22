@@ -9,9 +9,14 @@ from rest_framework.decorators import action
 from django.db import transaction
 from django.utils import timezone
 from sequence_run_manager.models import State, Sequence
-from sequence_run_manager.serializers.state import StateSerializer, StateCreateRequestSerializer, StateUpdateRequestSerializer
+from sequence_run_manager.serializers.state import (
+    StateSerializer,
+    StateCreateRequestSerializer,
+    StateUpdateRequestSerializer,
+)
 
 logger = logging.getLogger(__name__)
+
 
 @extend_schema_view(
     create=extend_schema(
@@ -108,8 +113,14 @@ class StateViewSet(
             latest_status = latest_state.status
             # check if the state status is valid
             if not self._validate_state_status(latest_status, request_status):
-                return Response({"detail": "Invalid state request. Can't add state '{}' to '{}'".format(request_status, latest_status)},
-                                status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "detail": "Invalid state request. Can't add state '{}' to '{}'".format(
+                            request_status, latest_status
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         # create state and sync sequence status atomically
         try:
             with transaction.atomic():
@@ -124,9 +135,13 @@ class StateViewSet(
                     sequence.status = request_status
                     sequence.save(update_fields=["status"])
         except Exception:
-            logger.exception("Failed to create state for sequence %s", sequence_orcabus_id)
-            return Response({"detail": "Failed to create state. Please try again later."},
-                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception(
+                "Failed to create state for sequence %s", sequence_orcabus_id
+            )
+            return Response(
+                {"detail": "Failed to create state. Please try again later."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         data = StateSerializer(instance).data
         headers = self.get_success_headers(data)
