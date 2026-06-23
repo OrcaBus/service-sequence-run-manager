@@ -157,6 +157,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
-          file: ./app/coverage.xml
+          file: ./coverage.xml
           flags: unittests
           name: orcabus-workflow-manager
