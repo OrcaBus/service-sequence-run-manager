@@ -34,13 +34,13 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24.x'
           cache: 'pnpm'
@@ -97,11 +97,30 @@ jobs:
   test-app:
     runs-on: ubuntu-22.04-arm
     if: ${{ !github.event.pull_request.draft }}
+    permissions:
+      id-token: write
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: sequence_run_manager
+          POSTGRES_USER: orcabus
+          POSTGRES_PASSWORD: orcabus # pragma: allowlist secret
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -112,12 +131,32 @@ jobs:
           pip3 -V
           make --version
 
-      - name: Install
-        working-directory: ./app
+      - name: Test event schema
+        working-directory: ./docs/events
         run: |
           make install
-
-      - name: Install
-        working-directory: ./app
-        run: |
           make test
+
+      # note;
+      # on CI environment, it is an intentional pointing to 'requirements-test.txt' deps file and integration-test (it)
+      # Django profile and running it via 'manage.py test' to detect any dependency drift from local dev to the runtime
+      # target. i.e. the local dev != test or runtime target env.  ~victor
+      - name: Test
+        working-directory: ./app
+        env:
+          DJANGO_SETTINGS_MODULE: sequence_run_manager.settings.it
+          DB_HOSTNAME: localhost
+          DB_PORT: 5432
+        run: |
+          make install
+          make migrate
+          coverage run --rcfile .coveragerc --source='.' manage.py test
+          coverage xml
+
+      - name: Publish coverage to to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          file: ./coverage.xml
+          flags: unittests
+          name: orcabus-workflow-manager
