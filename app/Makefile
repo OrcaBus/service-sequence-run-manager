@@ -1,5 +1,9 @@
 .EXPORT_ALL_VARIABLES:
 DJANGO_SETTINGS_MODULE = sequence_run_manager.settings.local
+EVENT_BUS_NAME = mock-bus
+
+DB_HOSTNAME ?= localhost
+DB_PORT ?= 5432
 
 # Docker compose files
 COMPOSE_LOCAL = compose_local.yml
