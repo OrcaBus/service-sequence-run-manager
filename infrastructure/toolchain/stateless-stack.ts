@@ -21,7 +21,10 @@ export class StatelessStack extends cdk.Stack {
       pipelineName: 'OrcaBus-StatelessSequnceRunManager',
       cdkSynthCmd: ['pnpm install --frozen-lockfile --ignore-scripts', 'pnpm cdk synth'],
       unitAppTestConfig: {
-        command: ['cd app', 'make install', 'make test'],
+        command: [
+          'cd app',
+          'DJANGO_SETTINGS_MODULE=workflow_manager.settings.it DB_PORT=5435 make test-aws',
+        ],
         partialBuildSpec: {
           phases: {
             install: {

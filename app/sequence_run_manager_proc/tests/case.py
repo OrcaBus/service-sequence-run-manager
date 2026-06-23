@@ -1,11 +1,10 @@
 import logging
-import uuid
 import os
 from django.test import TestCase
 from libumccr import aws
 from libumccr.aws import libsqs, libeb, libsm
 from mockito import when, unstub, mock
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
 from sequence_run_manager_proc.tests.factories import SequenceRunManagerProcFactory
@@ -21,37 +20,17 @@ class SequenceRunProcUnitTestCase(TestCase):
         # Set AWS region
         os.environ["AWS_DEFAULT_REGION"] = "ap-southeast-2"
 
-        mock_sqs = aws.client(
-            "sqs",
-            endpoint_url="http://localhost:4566",
-            region_name="us-east-1",
-            aws_access_key_id=str(uuid.uuid4()),
-            aws_secret_access_key=str(uuid.uuid4()),
-            aws_session_token=f"{uuid.uuid4()}_{uuid.uuid4()}",
-        )
+        mock_sqs = MagicMock()
         when(aws).sqs_client(...).thenReturn(mock_sqs)
         when(libsqs).sqs_client(...).thenReturn(mock_sqs)
 
-        mock_eb = aws.client(
-            "events",
-            endpoint_url="http://localhost:4566",
-            region_name="us-east-1",
-            aws_access_key_id=str(uuid.uuid4()),
-            aws_secret_access_key=str(uuid.uuid4()),
-            aws_session_token=f"{uuid.uuid4()}_{uuid.uuid4()}",
-        )
+        mock_eb = MagicMock()
+        mock_eb.put_events.return_value = {"FailedEntryCount": 0, "Entries": [{"EventId": "test-event-id"}]}
         when(aws).eb_client(...).thenReturn(mock_eb)
         when(libeb).eb_client(...).thenReturn(mock_eb)
 
         # Mock Secrets Manager client
-        mock_sm = aws.client(
-            "secretsmanager",
-            endpoint_url="http://localhost:4566",
-            region_name="ap-southeast-2",  # Use consistent region
-            aws_access_key_id=str(uuid.uuid4()),
-            aws_secret_access_key=str(uuid.uuid4()),
-            aws_session_token=f"{uuid.uuid4()}_{uuid.uuid4()}",
-        )
+        mock_sm = MagicMock()
         when(aws).sm_client(...).thenReturn(mock_sm)
         when(libsm).sm_client(...).thenReturn(mock_sm)
 

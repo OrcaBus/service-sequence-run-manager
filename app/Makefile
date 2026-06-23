@@ -284,15 +284,17 @@ psql:
 	@docker exec -e PGPASSWORD=$(DB_PASSWORD) -it $(DB_CONTAINER) psql -h $(DB_HOST) -U $(DB_USER) -d $(DB_NAME)
 
 # Test commands
-.PHONY: test suite
+.PHONY: test suite test-aws
 
+# on local dev, you need to `make up` yourself
+# on github action, it leverages github built-in service container (cache docker image) to avoid rate limit
+test: install suite
+
+# on AWS CICD pipeline, need to pull docker image from the aws ecr public registry to avoid the rate limit
 # full mock suite test pipeline - install deps, bring up compose test stack, run suite, bring down compose test stack
-test: install test-up suite test-down
+test-aws: install test-up suite test-down
 
 suite:
-	@DJANGO_SETTINGS_MODULE=sequence_run_manager.settings.it \
-	DB_HOSTNAME=localhost \
-	DB_PORT=5435 \
 	python manage.py test
 
 # Run tests with coverage
@@ -352,6 +354,7 @@ help:
 	@echo "  make schema-gen  - Generate schema from events"
 	@echo "\nTest Commands:"
 	@echo "  make test        - Run full test suite"
+	@echo "  make test-aws    - Run tests in AWS environment"
 	@echo "  make test-up     - Start test environment"
 	@echo "  make test-down   - Stop test environment"
 	@echo "  make coverage    - Run tests with coverage"
