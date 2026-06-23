@@ -23,7 +23,7 @@ export class StatelessStack extends cdk.Stack {
       unitAppTestConfig: {
         command: [
           'cd app',
-          'DJANGO_SETTINGS_MODULE=workflow_manager.settings.it DB_PORT=5435 make test-aws',
+          'DJANGO_SETTINGS_MODULE=sequence_run_manager.settings.it DB_PORT=5435 make test-aws',
         ],
         partialBuildSpec: {
           phases: {

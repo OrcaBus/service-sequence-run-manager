@@ -102,9 +102,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env:
-          POSTGRES_DB: workflow_manager
+          POSTGRES_DB: sequence_run_manager
           POSTGRES_USER: orcabus
           POSTGRES_PASSWORD: orcabus # pragma: allowlist secret
         options: >-
@@ -157,6 +157,6 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
-          file: ./coverage.xml
+          file: ./app/coverage.xml
           flags: unittests
           name: orcabus-workflow-manager
