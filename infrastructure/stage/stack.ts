@@ -1,6 +1,6 @@
 import path from 'path';
 import * as cdk from 'aws-cdk-lib';
-import { aws_lambda, aws_secretsmanager, Duration, Stack } from 'aws-cdk-lib';
+import { aws_lambda, aws_secretsmanager, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ISecurityGroup, IVpc, SecurityGroup, Vpc, VpcLookupOptions } from 'aws-cdk-lib/aws-ec2';
 import { EventBus, EventField, IEventBus, Rule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
@@ -33,6 +33,7 @@ import {
 } from '@orcabus/platform-cdk-constructs/shared-config/database';
 import { AutoTriggerBackupMigration } from './lambda-migration';
 import { SequenceRunManagerSchemaRegistry } from './event-schema';
+import { GitStack } from '@orcabus/platform-cdk-constructs/deployment-stack-pipeline';
 
 export interface SequenceRunManagerStackProps {
   lambdaSecurityGroupName: string;
@@ -46,7 +47,7 @@ export interface SequenceRunManagerStackProps {
   icav2AccessTokenSecretId: string;
 }
 
-export class SequenceRunManagerStack extends Stack {
+export class SequenceRunManagerStack extends GitStack {
   private readonly baseLayer: PythonLayerVersion;
   private readonly lambdaEnv;
   private readonly lambdaRuntimePythonVersion: aws_lambda.Runtime = aws_lambda.Runtime.PYTHON_3_12;
