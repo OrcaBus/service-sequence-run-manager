@@ -18,7 +18,10 @@ from sequence_run_manager.models import (
     Comment,
 )
 from sequence_run_manager.models.comment import TargetType
-from sequence_run_manager.aws_event_bridge.event_srv import emit_srm_api_event
+from sequence_run_manager.aws_event_bridge.event_srv import (
+    emit_srllc_api_event,
+    emit_srssc_api_event,
+)
 
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
@@ -115,7 +118,7 @@ class SequenceRunActionViewSet(ViewSet):
         )
 
         try:
-            emit_srm_api_event(samplesheet_change_eb_payload)
+            emit_srssc_api_event(samplesheet_change_eb_payload)
             logger.info(
                 f"Samplesheet change event emitted for sequence run {sequence_run.sequence_run_id}"
             )
@@ -167,7 +170,7 @@ class SequenceRunActionViewSet(ViewSet):
                     )
                 )
                 try:
-                    emit_srm_api_event(library_linking_change_eb_payload)
+                    emit_srllc_api_event(library_linking_change_eb_payload)
                     logger.info(
                         f"Library linking change event emitted for sequence run {sequence_run.sequence_run_id}"
                     )

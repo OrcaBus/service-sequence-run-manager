@@ -491,7 +491,8 @@ class SequenceViewSetTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_create_state_resolved_after_failed(self):
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_resolved_after_failed(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -513,8 +514,22 @@ class SequenceViewSetTestCase(TestCase):
             "RESOLVED",
             "Sequence status should be updated to RESOLVED",
         )
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(
+            srsc_event["instrumentRunId"], sequence_run.instrument_run_id
+        )
+        self.assertEqual(srsc_event["runVolumeName"], sequence_run.run_volume_name)
+        self.assertEqual(srsc_event["runFolderPath"], sequence_run.run_folder_path)
+        self.assertEqual(srsc_event["runDataUri"], sequence_run.run_data_uri)
+        self.assertEqual(
+            srsc_event["sampleSheetName"], sequence_run.sample_sheet_name
+        )
+        self.assertEqual(srsc_event["status"], "RESOLVED")
 
-    def test_create_state_deprecated_after_succeeded(self):
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_deprecated_after_succeeded(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -535,8 +550,41 @@ class SequenceViewSetTestCase(TestCase):
             "DEPRECATED",
             "Sequence status should be updated to DEPRECATED",
         )
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["status"], "DEPRECATED")
 
-    def test_create_state_only_deprecated_when_no_prior_states(self):
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_publish_failure_returns_error_and_rolls_back_state(
+        self, mock_emit_srsc_event
+    ):
+        mock_emit_srsc_event.side_effect = RuntimeError("event bus unavailable")
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "RESOLVED", "comment": "Handled"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 502)
+        self.assertIn("rolled back", response.data["detail"])
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, "SUCCEEDED")
+        mock_emit_srsc_event.assert_called_once()
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_only_deprecated_when_no_prior_states(
+        self, mock_emit_srsc_event
+    ):
         orphan = Sequence.objects.create(
             instrument_run_id="orphan_run_001",
             run_volume_name="vol",
@@ -558,6 +606,7 @@ class SequenceViewSetTestCase(TestCase):
             format="json",
         )
         self.assertEqual(bad.status_code, 400)
+        mock_emit_srsc_event.assert_not_called()
         good = self.client.post(
             f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
             {"status": "DEPRECATED", "comment": "initial"},
@@ -565,15 +614,23 @@ class SequenceViewSetTestCase(TestCase):
         )
         self.assertEqual(good.status_code, 201)
         self.assertEqual(good.data["status"], "DEPRECATED")
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], orphan.orcabus_id)
+        self.assertEqual(srsc_event["status"], "DEPRECATED")
 
-    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srm_api_event")
-    def test_add_samplesheet_action(self, mock_emit_event):
+    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srllc_api_event")
+    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srssc_api_event")
+    def test_add_samplesheet_action(
+        self, mock_emit_srssc_event, mock_emit_srllc_event
+    ):
         """
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_add_samplesheet_action
         """
         logger.info("Add samplesheet action")
         # Mock the event emission to avoid actual EventBridge calls
-        mock_emit_event.return_value = None
+        mock_emit_srssc_event.return_value = None
+        mock_emit_srllc_event.return_value = None
 
         # Read the file content from ./examples/standard-sheet-with-settings.csv
         samplesheet_path = (
@@ -612,6 +669,8 @@ class SequenceViewSetTestCase(TestCase):
             "Samplesheet added successfully",
             "Detail is expected",
         )
+        mock_emit_srssc_event.assert_called_once()
+        mock_emit_srllc_event.assert_called_once()
 
         # Get the created sequence_run (it's created by the add_samplesheet action)
         sequence_run = (
