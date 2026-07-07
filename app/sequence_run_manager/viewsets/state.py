@@ -98,7 +98,7 @@ class StateTransitionMixin:
             comment=request_comment,
         )
         logger.info(
-            "Manual sequence-run state created: sequence_id=%s state_id=%s status=%s",
+            "Manual sequence-run state persisted (pending SRSC emission): sequence_id=%s state_id=%s status=%s",
             sequence.orcabus_id,
             instance.orcabus_id,
             request_status,
