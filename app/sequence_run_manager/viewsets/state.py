@@ -248,13 +248,13 @@ class StateViewSet(
             )
         except Exception:
             logger.exception(
-                "Manual state transition failed while emitting SRSC event and was rolled back: sequence_id=%s requested_status=%s",
+                "Manual state transition failed while constructing or emitting the SRSC event and was rolled back: sequence_id=%s requested_status=%s",
                 sequence_orcabus_id,
                 request_status,
             )
             return Response(
                 {
-                    "detail": "Failed to create sequence-run state and emit SRSC event. The operation was rolled back.",
+                    "detail": "Failed to create sequence-run state and publish its SRSC event. The operation was rolled back.",
                     "correlation_id": f"{sequence_orcabus_id}:{request_status}",
                 },
                 status=status.HTTP_502_BAD_GATEWAY,
