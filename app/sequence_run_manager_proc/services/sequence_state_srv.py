@@ -44,11 +44,11 @@ def map_sequence_run_new_state_to_srsc(
     return SequenceRunStateChange(
         id=sequence.orcabus_id,
         instrumentRunId=sequence.instrument_run_id,
-        runVolumeName=sequence.run_volume_name,
-        runFolderPath=sequence.run_folder_path,
-        runDataUri=sequence.run_data_uri,
-        sampleSheetName=sequence.sample_sheet_name,
+        runVolumeName=sequence.run_volume_name or "",
+        runFolderPath=sequence.run_folder_path or "",
+        runDataUri=sequence.run_data_uri or "",
+        sampleSheetName=sequence.sample_sheet_name or "",
         startTime=sequence.start_time,
-        endTime=sequence.end_time,
-        status=new_state.status,
+        endTime=sequence.end_time or "",
+        status=new_state.status or "",
     )
