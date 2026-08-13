@@ -200,27 +200,25 @@ class StateViewSet(
         request_status = vd["status"].upper()
         request_comment = vd["comment"]
 
-        latest_state = sequence.get_latest_state()
-        # Handle case when there's no latest state - only allow DEPRECATED
-        if not latest_state:
+        current_state = sequence.status
+        # Handle case when there's no current state - only allow DEPRECATED
+        if not current_state:
             if not self.is_valid_next_state(None, request_status):
                 return Response(
                     {
-                        "detail": "No state found for workflow run '{}'. Only DEPRECATED is allowed when there are no states.".format(
+                        "detail": "No current state found for workflow run '{}'. Only DEPRECATED is allowed when there is no current state.".format(
                             sequence_orcabus_id
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            latest_status = None
         else:
-            latest_status = latest_state.status
             # check if the state status is valid
-            if not self.is_valid_next_state(latest_status, request_status):
+            if not self.is_valid_next_state(current_state, request_status):
                 return Response(
                     {
                         "detail": "Invalid state request. Can't add state '{}' to '{}'".format(
-                            request_status, latest_status
+                            request_status, current_state
                         )
                     },
                     status=status.HTTP_400_BAD_REQUEST,

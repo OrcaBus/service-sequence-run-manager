@@ -531,11 +531,17 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_create_state_invalid_transition(self):
-        """Latest state is Complete (setUp); RESOLVED is only allowed after FAILED."""
+        """Sequence status wins even when the latest state allows the transition."""
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "RESOLVED", "comment": "Cannot from Complete"},
+            {"status": "RESOLVED", "comment": "Cannot from SUCCEEDED"},
             format="json",
         )
         self.assertEqual(response.status_code, 400)
@@ -548,6 +554,8 @@ class SequenceViewSetTestCase(TestCase):
         self, mock_create_state_and_emit_srsc
     ):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
         State.objects.create(
             sequence=sequence_run,
             status="FAILED",
@@ -572,11 +580,13 @@ class SequenceViewSetTestCase(TestCase):
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_create_state_resolved_after_failed(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
         State.objects.create(
             sequence=sequence_run,
-            status="FAILED",
+            status="SUCCEEDED",
             timestamp=now(),
-            comment="failed",
+            comment="stale detail status",
         )
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
@@ -611,9 +621,9 @@ class SequenceViewSetTestCase(TestCase):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
-            status="SUCCEEDED",
+            status="FAILED",
             timestamp=now(),
-            comment="ok",
+            comment="stale detail status",
         )
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
@@ -639,6 +649,8 @@ class SequenceViewSetTestCase(TestCase):
     ):
         mock_emit_srsc_event.side_effect = RuntimeError("event bus unavailable")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
         State.objects.create(
             sequence=sequence_run,
             status="FAILED",
@@ -656,11 +668,11 @@ class SequenceViewSetTestCase(TestCase):
             State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
         )
         sequence_run.refresh_from_db()
-        self.assertEqual(sequence_run.status, "SUCCEEDED")
+        self.assertEqual(sequence_run.status, "FAILED")
         mock_emit_srsc_event.assert_called_once()
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_only_deprecated_when_no_prior_states(
+    def test_create_state_only_deprecated_when_no_current_sequence_status(
         self, mock_emit_srsc_event
     ):
         orphan = Sequence.objects.create(
@@ -668,7 +680,7 @@ class SequenceViewSetTestCase(TestCase):
             run_volume_name="vol",
             run_folder_path="/p",
             run_data_uri="gds://vol/p",
-            status=SequenceStatus.from_seq_run_status("Complete"),
+            status=None,
             start_time=now(),
             sample_sheet_name="SampleSheet.csv",
             sequence_run_id="r.ORPHAN01",
