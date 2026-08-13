@@ -9,7 +9,7 @@ from sequence_run_manager_proc.tests.case import SequenceRunProcUnitTestCase
 
 
 class SequenceStateSrvUnitTests(SequenceRunProcUnitTestCase):
-    def test_map_sequence_run_new_state_uses_empty_strings_for_null_fields(self):
+    def test_map_sequence_run_new_state_uses_schema_compatible_null_values(self):
         sequence = SequenceFactory(
             run_volume_name=None,
             run_folder_path=None,
@@ -27,12 +27,8 @@ class SequenceStateSrvUnitTests(SequenceRunProcUnitTestCase):
             mode="json"
         )
 
-        for field in (
-            "runVolumeName",
-            "runFolderPath",
-            "runDataUri",
-            "sampleSheetName",
-            "endTime",
-            "status",
-        ):
+        for field in ("runVolumeName", "runFolderPath", "runDataUri", "status"):
             self.assertEqual(event[field], "")
+
+        self.assertIsNone(event["sampleSheetName"])
+        self.assertIsNone(event["endTime"])

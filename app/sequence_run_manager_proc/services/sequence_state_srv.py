@@ -47,8 +47,8 @@ def map_sequence_run_new_state_to_srsc(
         runVolumeName=sequence.run_volume_name or "",
         runFolderPath=sequence.run_folder_path or "",
         runDataUri=sequence.run_data_uri or "",
-        sampleSheetName=sequence.sample_sheet_name or "",
+        sampleSheetName=sequence.sample_sheet_name,
         startTime=sequence.start_time,
-        endTime=sequence.end_time or "",
+        endTime=sequence.end_time,
         status=new_state.status or "",
     )
