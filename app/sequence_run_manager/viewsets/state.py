@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from drf_spectacular.types import OpenApiTypes
@@ -20,6 +21,10 @@ from sequence_run_manager_proc.services.sequence_state_srv import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class InvalidStateTransition(ValueError):
+    """Raised when locked transition validation rejects a requested state."""
 
 
 class StateTransitionMixin:
@@ -79,13 +84,13 @@ class StateTransitionMixin:
         """Backward-compatible wrapper for the old validation method name."""
         return self.is_valid_next_state(current_status, request_status)
 
-    def create_state_and_emit_srsc(
+    def create_state_and_build_srsc(
         self,
         sequence: Sequence,
         request_status: str,
         request_comment: str,
     ) -> tuple[State, dict]:
-        """Create a manual sequence-run state and emit its SRSC event."""
+        """Create a manual sequence-run state and build its SRSC event."""
         logger.info(
             "Creating manual sequence-run state: sequence_id=%s status=%s",
             sequence.orcabus_id,
@@ -120,15 +125,42 @@ class StateTransitionMixin:
             request_status,
         )
 
-        emit_srsc_api_event(srsc_event)
+        return instance, srsc_event
+
+    def publish_srsc_after_commit(
+        self,
+        *,
+        srsc_event: dict,
+        sequence_id: str,
+        state_id: str,
+        request_status: str,
+    ) -> None:
+        """Publish a committed transition, logging enough context for recovery."""
+        try:
+            emit_srsc_api_event(srsc_event)
+        except Exception:
+            # Publication is best-effort until a transactional outbox is added.
+            # Keep this message queryable so CloudWatch can alarm on it and the
+            # event can be reconstructed from sequence_id/state_id.
+            logger.exception(
+                "Manual SRSC publication failed after database commit: "
+                "sequence_id=%s state_id=%s event_id=%s status=%s "
+                "recoverable=true",
+                sequence_id,
+                state_id,
+                srsc_event.get("id"),
+                request_status,
+            )
+            return
+
         logger.info(
-            "Manual SRSC event emitted: sequence_id=%s state_id=%s event_id=%s status=%s",
-            sequence.orcabus_id,
-            instance.orcabus_id,
+            "Manual SRSC event emitted after database commit: "
+            "sequence_id=%s state_id=%s event_id=%s status=%s",
+            sequence_id,
+            state_id,
             srsc_event.get("id"),
             request_status,
         )
-        return instance, srsc_event
 
 
 @extend_schema_view(
@@ -193,6 +225,7 @@ class StateViewSet(
 
         sequence_orcabus_id = self.kwargs.get("orcabus_id")
         sequence = Sequence.objects.get(orcabus_id=sequence_orcabus_id)
+        observed_status = sequence.status
 
         body = StateCreateRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
@@ -200,37 +233,67 @@ class StateViewSet(
         request_status = vd["status"].upper()
         request_comment = vd["comment"]
 
-        current_state = sequence.status
-        # Handle case when there's no current state - only allow DEPRECATED
-        if not current_state:
-            if not self.is_valid_next_state(None, request_status):
-                return Response(
-                    {
-                        "detail": "No current state found for workflow run '{}'. Only DEPRECATED is allowed when there is no current state.".format(
-                            sequence_orcabus_id
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            # check if the state status is valid
-            if not self.is_valid_next_state(current_state, request_status):
-                return Response(
-                    {
-                        "detail": "Invalid state request. Can't add state '{}' to '{}'".format(
-                            request_status, current_state
-                        )
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        # create state and sync sequence status atomically
         try:
             with transaction.atomic():
-                instance, _ = self.create_state_and_emit_srsc(
+                # The Sequence row is the shared lock target for every state
+                # transition, including sequences that do not have State rows.
+                sequence = Sequence.objects.select_for_update().get(
+                    orcabus_id=sequence_orcabus_id
+                )
+                current_status = sequence.status
+
+                if current_status != observed_status:
+                    logger.warning(
+                        "Sequence status changed before transition lock was acquired: "
+                        "sequence_id=%s requested_status=%s observed_status=%s "
+                        "locked_status=%s concurrent_update=true",
+                        sequence_orcabus_id,
+                        request_status,
+                        observed_status,
+                        current_status,
+                    )
+
+                if not self.is_valid_next_state(current_status, request_status):
+                    logger.warning(
+                        "Manual state transition rejected after locked validation: "
+                        "sequence_id=%s requested_status=%s current_status=%s",
+                        sequence_orcabus_id,
+                        request_status,
+                        current_status,
+                    )
+                    if current_status is None:
+                        raise InvalidStateTransition(
+                            "No current state found for workflow run '{}'. Only "
+                            "DEPRECATED is allowed when there is no current state.".format(
+                                sequence_orcabus_id
+                            )
+                        )
+                    raise InvalidStateTransition(
+                        "Invalid state request. Can't add state '{}' to '{}'".format(
+                            request_status, current_status
+                        )
+                    )
+
+                instance, srsc_event = self.create_state_and_build_srsc(
                     sequence,
                     request_status,
                     request_comment,
                 )
+                transaction.on_commit(
+                    partial(
+                        self.publish_srsc_after_commit,
+                        srsc_event=srsc_event,
+                        sequence_id=str(sequence.orcabus_id),
+                        state_id=str(instance.orcabus_id),
+                        request_status=request_status,
+                    ),
+                    robust=True,
+                )
+        except InvalidStateTransition as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except DatabaseError:
             logger.exception(
                 "Manual state transition failed during database operation and was rolled back: sequence_id=%s requested_status=%s",
@@ -246,16 +309,16 @@ class StateViewSet(
             )
         except Exception:
             logger.exception(
-                "Manual state transition failed while constructing or emitting the SRSC event and was rolled back: sequence_id=%s requested_status=%s",
+                "Manual state transition failed before commit and was rolled back: sequence_id=%s requested_status=%s",
                 sequence_orcabus_id,
                 request_status,
             )
             return Response(
                 {
-                    "detail": "Failed to create sequence-run state and publish its SRSC event. The operation was rolled back.",
+                    "detail": "Failed to create sequence-run state. The operation was rolled back.",
                     "correlation_id": f"{sequence_orcabus_id}:{request_status}",
                 },
-                status=status.HTTP_502_BAD_GATEWAY,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         data = StateSerializer(instance).data
