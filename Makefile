@@ -11,7 +11,7 @@ fix:
 	@pnpm lint-fix
 
 audit-fix:
-	@pnpm audit --fix
+	@pnpm audit --fix override
 
 install:
 	@pnpm install --frozen-lockfile

@@ -1,10 +1,12 @@
 import logging
 from pathlib import Path
-from unittest.mock import patch
+from threading import Barrier, Thread
+from unittest.mock import Mock, patch
 import base64
 import json
 
-from django.test import TestCase
+from django.db import DatabaseError, close_old_connections
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils.timezone import now
 from datetime import timedelta
@@ -21,6 +23,7 @@ from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager.models.state import State
 
 from sequence_run_manager.urls.base import api_base
+from sequence_run_manager.viewsets.state import StateTransitionMixin
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
 logger = logging.getLogger()
@@ -444,6 +447,28 @@ class SequenceViewSetTestCase(TestCase):
             {"RESOLVED": ["FAILED"], "DEPRECATED": ["SUCCEEDED"]},
         )
 
+    def test_state_transition_mixin_validation_rules(self):
+        mixin = StateTransitionMixin()
+
+        self.assertTrue(mixin.is_valid_next_state(None, "DEPRECATED"))
+        self.assertFalse(mixin.is_valid_next_state(None, "RESOLVED"))
+        self.assertFalse(mixin.is_valid_next_state("FAILED", "UNKNOWN"))
+        self.assertTrue(mixin._validate_state_status("FAILED", "RESOLVED"))
+
+        mixin.states_transition_validation_map = {
+            "DEPRECATED": {
+                "excluded_states": ["FAILED", "ABORTED", "RESOLVED", "DEPRECATED"]
+            },
+            "RESOLVED": {"allowed_states": ["FAILED"]},
+            "IGNORED": "unsupported-rule",
+        }
+
+        self.assertTrue(mixin.is_valid_next_state("SUCCEEDED", "DEPRECATED"))
+        self.assertFalse(mixin.is_valid_next_state("FAILED", "DEPRECATED"))
+        self.assertTrue(mixin.is_valid_next_state("FAILED", "RESOLVED"))
+        self.assertFalse(mixin.is_valid_next_state("SUCCEEDED", "RESOLVED"))
+        self.assertFalse(mixin.is_valid_next_state("FAILED", "IGNORED"))
+
     def test_patch_state_comment(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         state = (
@@ -458,6 +483,31 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.data["comment"], "Resolution note")
         state.refresh_from_db()
         self.assertEqual(state.comment, "Resolution note")
+
+    @patch("sequence_run_manager.viewsets.state.StateViewSet.get_object")
+    def test_patch_state_comment_clears_prefetch_cache(self, mock_get_object):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = (
+            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        )
+        original_save = state.save
+
+        def save_with_prefetch_cache(*args, **kwargs):
+            result = original_save(*args, **kwargs)
+            state._prefetched_objects_cache = {"cached": ["value"]}
+            return result
+
+        state.save = save_with_prefetch_cache
+        mock_get_object.return_value = state
+
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Resolution note"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(state._prefetched_objects_cache, {})
 
     def test_patch_state_requires_comment(self):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -482,16 +532,7 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_create_state_invalid_transition(self):
-        """Latest state is Complete (setUp); RESOLVED is only allowed after FAILED."""
-        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        response = self.client.post(
-            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "RESOLVED", "comment": "Cannot from Complete"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 400)
-
-    def test_create_state_resolved_after_failed(self):
+        """Sequence status wins even when the latest state allows the transition."""
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -501,9 +542,94 @@ class SequenceViewSetTestCase(TestCase):
         )
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+            {"status": "RESOLVED", "comment": "Cannot from SUCCEEDED"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_revalidates_locked_sequence_status(
+        self, mock_emit_srsc_event
+    ):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+
+        locked_sequence = Sequence.objects.get(pk=sequence_run.pk)
+        locked_sequence.status = SequenceStatus.RESOLVED
+        locked_queryset = Mock()
+        locked_queryset.get.return_value = locked_sequence
+
+        with patch.object(
+            Sequence.objects,
+            "select_for_update",
+            return_value=locked_queryset,
+        ) as mock_select_for_update:
+            with self.assertLogs(
+                "sequence_run_manager.viewsets.state", level="WARNING"
+            ) as logs:
+                response = self.client.post(
+                    f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+                    {"status": "RESOLVED", "comment": "Handled"},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("concurrent_update=true", " ".join(logs.output))
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        mock_select_for_update.assert_called_once_with()
+        mock_emit_srsc_event.assert_not_called()
+
+    @patch(
+        "sequence_run_manager.viewsets.state.StateViewSet.create_state_and_build_srsc",
+        side_effect=DatabaseError("database unavailable"),
+    )
+    def test_create_state_database_failure_returns_error_and_rolls_back_state(
+        self, mock_create_state_and_build_srsc
+    ):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
+
+        response = self.client.post(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
             {"status": "RESOLVED", "comment": "Handled"},
             format="json",
         )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("rolled back", response.data["detail"])
+        self.assertIn("correlation_id", response.data)
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        mock_create_state_and_build_srsc.assert_called_once()
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_resolved_after_failed(self, mock_emit_srsc_event):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+        State.objects.create(
+            sequence=sequence_run,
+            status="SUCCEEDED",
+            timestamp=now(),
+            comment="stale detail status",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+                {"status": "RESOLVED", "comment": "Handled"},
+                format="json",
+            )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "RESOLVED")
         self.assertEqual(response.data["comment"], "Handled")
@@ -513,20 +639,31 @@ class SequenceViewSetTestCase(TestCase):
             "RESOLVED",
             "Sequence status should be updated to RESOLVED",
         )
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["instrumentRunId"], sequence_run.instrument_run_id)
+        self.assertEqual(srsc_event["runVolumeName"], sequence_run.run_volume_name)
+        self.assertEqual(srsc_event["runFolderPath"], sequence_run.run_folder_path)
+        self.assertEqual(srsc_event["runDataUri"], sequence_run.run_data_uri)
+        self.assertEqual(srsc_event["sampleSheetName"], sequence_run.sample_sheet_name)
+        self.assertEqual(srsc_event["status"], "RESOLVED")
 
-    def test_create_state_deprecated_after_succeeded(self):
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_deprecated_after_succeeded(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
-            status="SUCCEEDED",
+            status="FAILED",
             timestamp=now(),
-            comment="ok",
+            comment="stale detail status",
         )
-        response = self.client.post(
-            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "DEPRECATED", "comment": "No longer used"},
-            format="json",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+                {"status": "DEPRECATED", "comment": "No longer used"},
+                format="json",
+            )
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data["status"], "DEPRECATED")
         sequence_run.refresh_from_db()
@@ -535,14 +672,77 @@ class SequenceViewSetTestCase(TestCase):
             "DEPRECATED",
             "Sequence status should be updated to DEPRECATED",
         )
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["status"], "DEPRECATED")
 
-    def test_create_state_only_deprecated_when_no_prior_states(self):
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_publish_failure_is_logged_after_commit(
+        self, mock_emit_srsc_event
+    ):
+        mock_emit_srsc_event.side_effect = RuntimeError("event bus unavailable")
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
+        with self.assertLogs(
+            "sequence_run_manager.viewsets.state", level="ERROR"
+        ) as logs:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+                    {"status": "RESOLVED", "comment": "Handled"},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, 201)
+        state = State.objects.get(sequence=sequence_run, status="RESOLVED")
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, "RESOLVED")
+        mock_emit_srsc_event.assert_called_once()
+        logged = " ".join(logs.output)
+        self.assertIn("failed after database commit", logged)
+        self.assertIn(str(sequence_run.orcabus_id), logged)
+        self.assertIn(str(state.orcabus_id), logged)
+        self.assertIn("recoverable=true", logged)
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_defers_srsc_publication_until_commit(
+        self, mock_emit_srsc_event
+    ):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            response = self.client.post(
+                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
+                {"status": "RESOLVED", "comment": "Handled"},
+                format="json",
+            )
+            mock_emit_srsc_event.assert_not_called()
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(callbacks), 1)
+        callbacks[0]()
+        mock_emit_srsc_event.assert_called_once()
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_create_state_only_deprecated_when_no_current_sequence_status(
+        self, mock_emit_srsc_event
+    ):
         orphan = Sequence.objects.create(
             instrument_run_id="orphan_run_001",
             run_volume_name="vol",
             run_folder_path="/p",
             run_data_uri="gds://vol/p",
-            status=SequenceStatus.from_seq_run_status("Complete"),
+            status=None,
             start_time=now(),
             sample_sheet_name="SampleSheet.csv",
             sequence_run_id="r.ORPHAN01",
@@ -558,22 +758,30 @@ class SequenceViewSetTestCase(TestCase):
             format="json",
         )
         self.assertEqual(bad.status_code, 400)
-        good = self.client.post(
-            f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
-            {"status": "DEPRECATED", "comment": "initial"},
-            format="json",
-        )
+        mock_emit_srsc_event.assert_not_called()
+        with self.captureOnCommitCallbacks(execute=True):
+            good = self.client.post(
+                f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
+                {"status": "DEPRECATED", "comment": "initial"},
+                format="json",
+            )
         self.assertEqual(good.status_code, 201)
         self.assertEqual(good.data["status"], "DEPRECATED")
+        mock_emit_srsc_event.assert_called_once()
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["id"], orphan.orcabus_id)
+        self.assertEqual(srsc_event["status"], "DEPRECATED")
 
-    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srm_api_event")
-    def test_add_samplesheet_action(self, mock_emit_event):
+    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srllc_api_event")
+    @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srssc_api_event")
+    def test_add_samplesheet_action(self, mock_emit_srssc_event, mock_emit_srllc_event):
         """
         python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_add_samplesheet_action
         """
         logger.info("Add samplesheet action")
         # Mock the event emission to avoid actual EventBridge calls
-        mock_emit_event.return_value = None
+        mock_emit_srssc_event.return_value = None
+        mock_emit_srllc_event.return_value = None
 
         # Read the file content from ./examples/standard-sheet-with-settings.csv
         samplesheet_path = (
@@ -612,6 +820,8 @@ class SequenceViewSetTestCase(TestCase):
             "Samplesheet added successfully",
             "Detail is expected",
         )
+        mock_emit_srssc_event.assert_called_once()
+        mock_emit_srllc_event.assert_called_once()
 
         # Get the created sequence_run (it's created by the add_samplesheet action)
         sequence_run = (
@@ -711,3 +921,74 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(
             len(get_samplesheet_checksum_response.data), 1, "One result is expected"
         )
+
+
+@skipUnlessDBFeature("has_select_for_update")
+class StateTransitionConcurrencyTestCase(TransactionTestCase):
+    """Exercise real row-lock behavior using separate database connections."""
+
+    reset_sequences = True
+    sequence_run_endpoint = f"/{api_base}sequence_run"
+
+    def setUp(self):
+        self.sequence = Sequence.objects.create(
+            instrument_run_id="concurrent_run_001",
+            run_volume_name="vol",
+            run_folder_path="/runs/concurrent_run_001",
+            run_data_uri="gds://vol/runs/concurrent_run_001",
+            status=SequenceStatus.FAILED,
+            start_time=now(),
+            sample_sheet_name="SampleSheet.csv",
+            sequence_run_id="r.CONCURRENT01",
+            sequence_run_name="concurrent_run_001",
+            api_url="https://bssh.dev/api/v1/runs/r.CONCURRENT01",
+        )
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_competing_resolved_transitions_create_one_state(
+        self, mock_emit_srsc_event
+    ):
+        initial_read_barrier = Barrier(2)
+        original_get = Sequence.objects.get
+        responses = []
+        errors = []
+
+        def synchronized_initial_get(*args, **kwargs):
+            sequence = original_get(*args, **kwargs)
+            initial_read_barrier.wait(timeout=5)
+            return sequence
+
+        def post_transition():
+            close_old_connections()
+            try:
+                client = APIClient()
+                response = client.post(
+                    f"{self.sequence_run_endpoint}/{self.sequence.orcabus_id}/state/",
+                    {"status": "RESOLVED", "comment": "Handled"},
+                    format="json",
+                )
+                responses.append(response.status_code)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                close_old_connections()
+
+        with patch.object(
+            Sequence.objects,
+            "get",
+            side_effect=synchronized_initial_get,
+        ):
+            threads = [Thread(target=post_transition) for _ in range(2)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join(timeout=10)
+
+        self.assertFalse(any(thread.is_alive() for thread in threads))
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(responses), [201, 400])
+        self.assertEqual(
+            State.objects.filter(sequence=self.sequence, status="RESOLVED").count(),
+            1,
+        )
+        mock_emit_srsc_event.assert_called_once()
