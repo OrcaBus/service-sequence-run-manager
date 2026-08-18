@@ -10,7 +10,9 @@ class TargetType(models.TextChoices):
 
 
 class CommentManager(OrcaBusBaseManager):
-    pass
+    def active(self):
+        """Return comments that have not been soft-deleted."""
+        return self.filter(is_deleted=False)
 
 
 class Comment(OrcaBusBaseModel):

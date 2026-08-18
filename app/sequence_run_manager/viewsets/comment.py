@@ -51,9 +51,7 @@ class CommentViewSet(
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        return Comment.objects.filter(
-            target_id=self.kwargs["orcabus_id"], is_deleted=False
-        )
+        return Comment.objects.active().filter(target_id=self.kwargs["orcabus_id"])
 
     def perform_create(self, serializer):
         serializer.save(target_id=self.kwargs["orcabus_id"])
