@@ -302,6 +302,29 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 200, "Ok status response is expected")
         self.assertEqual(len(response.data), 2, "Two states are expected")
 
+    def test_get_sequence_comments_excludes_soft_deleted_comments(self):
+        instrument_run_id = "190101_A01052_0001_BH5LY7ACGT"
+        sequence = Sequence.objects.get(instrument_run_id=instrument_run_id)
+        active_comment = Comment.objects.get(
+            target_id=sequence.orcabus_id, target_type=TargetType.SEQUENCE
+        )
+        deleted_comment = Comment.objects.create(
+            target_id=sequence.orcabus_id,
+            target_type=TargetType.SEQUENCE,
+            comment="Deleted comment",
+            created_by="TestUser",
+            is_deleted=True,
+        )
+
+        response = self.client.get(
+            f"{self.sequence_endpoint}/{instrument_run_id}/comments/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        returned_ids = {comment["orcabus_id"] for comment in response.data}
+        self.assertIn(str(active_comment.orcabus_id), returned_ids)
+        self.assertNotIn(str(deleted_comment.orcabus_id), returned_ids)
+
     # def test_add_sequence_run_comment(self):
     #     """
     #     python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_add_sequence_comment
