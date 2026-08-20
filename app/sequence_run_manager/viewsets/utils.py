@@ -181,10 +181,10 @@ def filtered_sequence_runs_queryset(
     if end_dt:
         qs = qs.filter(start_time__lte=end_dt)
 
-    library_id = query_params.get("library_id")
-    if library_id:
+    library_ids = query_params.getlist("library_id")
+    if library_ids:
         sequence_ids = LibraryAssociation.objects.filter(
-            library_id=library_id
+            library_id__in=library_ids
         ).values_list("sequence_id", flat=True)
         qs = qs.filter(orcabus_id__in=sequence_ids)
 
