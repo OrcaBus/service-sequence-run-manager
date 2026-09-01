@@ -10,6 +10,7 @@ from drf_spectacular.utils import (
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.viewsets import GenericViewSet
 from rest_framework import mixins, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import DatabaseError, transaction
@@ -23,8 +24,10 @@ from sequence_run_manager.serializers.state import (
     StateTransitionResponseSerializer,
     StateTransitionValidationErrorSerializer,
 )
+from sequence_run_manager.viewsets.utils import get_email_from_bearer_authorization
 from sequence_run_manager_proc.services.sequence_state_srv import (
     map_sequence_run_new_state_to_srsc,
+    srsc_event_detail,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,9 @@ STATE_TRANSITION_RESPONSES = {
             "transition failed because a sequence run was not found or the "
             "transition was invalid."
         ),
+    ),
+    status.HTTP_401_UNAUTHORIZED: OpenApiResponse(
+        description="A valid Bearer JWT with an email claim is required.",
     ),
     status.HTTP_500_INTERNAL_SERVER_ERROR: OpenApiResponse(
         response=StateTransitionResponseSerializer,
@@ -137,18 +143,25 @@ class StateTransitionMixin:
         sequence: Sequence,
         request_status: str,
         request_comment: str,
+        created_by: str,
     ) -> tuple[State, dict]:
-        """Create a manual sequence-run state and build its SRSC event."""
+        """Create a manual sequence-run state and build its SRSC event.
+
+        `created_by` is the normalized email from the caller's Bearer JWT; it is
+        the sole source of authorship, never the request body.
+        """
         logger.info(
-            "Creating manual sequence-run state: sequence_id=%s status=%s",
+            "Creating manual sequence-run state: sequence_id=%s status=%s created_by=%s",
             sequence.orcabus_id,
             request_status,
+            created_by,
         )
         instance = State.objects.create(
             sequence=sequence,
             status=request_status,
             timestamp=timezone.now(),
             comment=request_comment,
+            created_by=created_by,
         )
         logger.info(
             "Manual sequence-run state persisted (pending SRSC emission): sequence_id=%s state_id=%s status=%s",
@@ -161,10 +174,12 @@ class StateTransitionMixin:
             sequence.status = request_status
             sequence.save(update_fields=["status"])
 
-        srsc_event = map_sequence_run_new_state_to_srsc(
-            sequence,
-            instance,
-        ).model_dump(mode="json")
+        srsc_event = srsc_event_detail(
+            map_sequence_run_new_state_to_srsc(
+                sequence,
+                instance,
+            )
+        )
         logger.info(
             "Manual SRSC event built: sequence_id=%s state_id=%s event_id=%s status=%s",
             sequence.orcabus_id,
@@ -230,8 +245,20 @@ class StateTransitionMixin:
 @extend_schema_view(
     partial_update=extend_schema(
         request=StateUpdateRequestSerializer,
-        responses={200: StateSerializer},
-        description=("Update state comment only."),
+        responses={
+            200: StateSerializer,
+            401: OpenApiResponse(
+                description="A valid Bearer JWT with an email claim is required."
+            ),
+            403: OpenApiResponse(
+                description="The authenticated user did not create this state."
+            ),
+        },
+        description=(
+            "Update the state comment only. Bearer authentication is required; "
+            "only custom states (RESOLVED, DEPRECATED) are editable, and states "
+            "with a recorded creator may only be updated by that creator."
+        ),
     ),
 )
 class StateViewSet(
@@ -268,10 +295,14 @@ class StateViewSet(
 
     def update(self, request, *args, **kwargs):
         """
-        Update a state for a sequence run.
-        Currently we support "Resolved", "Deprecated"
+        Update the comment of a custom state ("Resolved", "Deprecated").
+
+        Requires a Bearer JWT; when the state records a creator, only that
+        creator may edit it. States created before creator auditing have no
+        recorded creator and stay editable by any authenticated caller.
         """
         partial = kwargs.pop("partial", False)
+        actor = get_email_from_bearer_authorization(request)
         instance = self.get_object()
 
         required_fields = {"comment"}
@@ -281,6 +312,26 @@ class StateViewSet(
             return Response(
                 {"detail": "comment field is required."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Only user-created states carry an editable comment; system states
+        # (STARTED, SUCCEEDED, ...) are not in the transition map.
+        if instance.status not in self.states_transition_validation_map:
+            return Response(
+                {"detail": "Invalid state status to update comment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        creator = (instance.created_by or "").strip().lower()
+        if creator and creator != actor:
+            logger.warning(
+                "State comment update rejected for non-creator: state_id=%s actor=%s creator=%s",
+                instance.orcabus_id,
+                actor,
+                creator,
+            )
+            raise PermissionDenied(
+                "You don't have permission to update this state comment."
             )
 
         body = StateUpdateRequestSerializer(data=request.data, partial=partial)
@@ -328,6 +379,7 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
         normalized_id: str,
         request_status: str,
         request_comment: str,
+        created_by: str,
     ) -> State:
         """Transition a single sequence run under a row lock.
 
@@ -385,6 +437,7 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
                 locked_sequence,
                 request_status,
                 request_comment,
+                created_by,
             )
             transaction.on_commit(
                 partial(
@@ -400,6 +453,9 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
         return instance
 
     def _state_transition(self, request, request_status: str):
+        # Authenticate before touching the body: authorship comes from the JWT
+        # only, and a missing or malformed token fails the whole request (401).
+        created_by = get_email_from_bearer_authorization(request)
         body = StateTransitionRequestSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         vd = body.validated_data
@@ -443,6 +499,7 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
                     normalized_id,
                     request_status,
                     request_comment,
+                    created_by,
                 )
             except InvalidStateTransition as exc:
                 failures.append(
@@ -522,8 +579,9 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
         responses=STATE_TRANSITION_RESPONSES,
         summary="Mark sequence runs as deprecated",
         description=(
-            "Transition sequence runs from SUCCEEDED to DEPRECATED, and emit an SRSC "
-            "event for each transitioned run once the transaction commits."
+            "Transition sequence runs from SUCCEEDED to DEPRECATED, record the "
+            "Bearer JWT email as the state creator, and emit an SRSC event for "
+            "each transitioned run once the transaction commits."
         ),
     )
     @action(detail=False, methods=["post"], url_path="deprecate")
@@ -535,8 +593,9 @@ class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
         responses=STATE_TRANSITION_RESPONSES,
         summary="Mark sequence runs as resolved",
         description=(
-            "Transition sequence runs from FAILED to RESOLVED, and emit an SRSC "
-            "event for each transitioned run once the transaction commits."
+            "Transition sequence runs from FAILED to RESOLVED, record the Bearer "
+            "JWT email as the state creator, and emit an SRSC event for each "
+            "transitioned run once the transaction commits."
         ),
     )
     @action(detail=False, methods=["post"], url_path="resolve")

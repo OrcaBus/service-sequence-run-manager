@@ -8,6 +8,10 @@ from sequence_run_manager_proc.domain.events.srsc import (
     SequenceRunStateChange,
     AWSEvent,
 )
+from sequence_run_manager_proc.services.sequence_state_srv import (
+    SRSC_SCHEMA_VERSION,
+    get_srsc_hash,
+)
 from sequence_run_manager_proc.tests.case import SequenceRunProcUnitTestCase, logger
 
 
@@ -36,6 +40,29 @@ class SequenceDomainUnitTests(SequenceRunProcUnitTestCase):
         self.assertIsInstance(validated_object, SequenceRunStateChange)
         self.assertIn("id", validated_object.model_dump().keys())
         self.assertIn("instrumentRunId", validated_object.model_dump().keys())
+
+    def test_system_event_is_versioned_and_unauthored(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_sequence_domain.SequenceDomainUnitTests.test_system_event_is_versioned_and_unauthored
+        """
+        mock_sequence = SequenceFactory()
+        mock_sequence_domain = SequenceDomain(
+            sequence=mock_sequence, state_has_changed=True, status_has_changed=True
+        )
+
+        event = mock_sequence_domain.to_event()
+        self.assertEqual(event.version, SRSC_SCHEMA_VERSION)
+        self.assertEqual(event.orcabusId, mock_sequence.orcabus_id)
+        # `id` is a content hash, not the sequence id.
+        self.assertNotEqual(event.id, mock_sequence.orcabus_id)
+        self.assertEqual(event.id, get_srsc_hash(event))
+
+        # A BSSH-driven state has no author, so the field is left out entirely.
+        self.assertIsNone(event.stateCreatedBy)
+        entry = mock_sequence_domain.to_put_events_request_entry(
+            event_bus_name="mock-bus"
+        )
+        self.assertNotIn("stateCreatedBy", json.loads(entry["Detail"]))
 
     # def test_unmarshall(self):
     #     """

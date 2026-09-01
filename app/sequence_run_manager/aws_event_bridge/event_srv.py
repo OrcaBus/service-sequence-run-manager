@@ -5,6 +5,9 @@ from libumccr.aws import libeb
 from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
 from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
 from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange
+from sequence_run_manager_proc.services.sequence_state_srv import (
+    srsc_event_detail_json,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -53,6 +56,7 @@ def _emit_api_event(event_type: str, event_entry: dict, event_bus_name: str):
 def emit_srsc_api_event(event: dict, attempt_count: int = 1):
     """Validate and emit a SequenceRunStateChange created through the API."""
     event_id = event.get("id", "unknown")
+    sequence_orcabus_id = event.get("orcabusId", "unknown")
     instrument_run_id = event.get("instrumentRunId", "unknown")
     event_status = event.get("status", "unknown")
 
@@ -62,14 +66,16 @@ def emit_srsc_api_event(event: dict, attempt_count: int = 1):
             raise ValueError("EVENT_BUS_NAME environment variable is not set.")
 
         validated = SequenceRunStateChange.model_validate(event)
-        detail_json = validated.model_dump_json()
+        detail_json = srsc_event_detail_json(validated)
         event_id = validated.id
+        sequence_orcabus_id = validated.orcabusId
         instrument_run_id = validated.instrumentRunId
         event_status = validated.status
 
         logger.info(
-            "Emitting SRSC event: event_id=%s instrument_run_id=%s status=%s attempt=%s",
+            "Emitting SRSC event: event_id=%s sequence_id=%s instrument_run_id=%s status=%s attempt=%s",
             event_id,
+            sequence_orcabus_id,
             instrument_run_id,
             event_status,
             attempt_count,
@@ -94,8 +100,9 @@ def emit_srsc_api_event(event: dict, attempt_count: int = 1):
                 if entry.get("ErrorCode") or entry.get("ErrorMessage")
             ]
             logger.error(
-                "EventBridge rejected SRSC event entry: event_id=%s instrument_run_id=%s status=%s attempt=%s failed_entry_count=%s failed_entries=%s",
+                "EventBridge rejected SRSC event entry: event_id=%s sequence_id=%s instrument_run_id=%s status=%s attempt=%s failed_entry_count=%s failed_entries=%s",
                 event_id,
+                sequence_orcabus_id,
                 instrument_run_id,
                 event_status,
                 attempt_count,
@@ -108,8 +115,9 @@ def emit_srsc_api_event(event: dict, attempt_count: int = 1):
             )
 
         logger.info(
-            "SRSC event emitted: event_id=%s instrument_run_id=%s status=%s attempt=%s",
+            "SRSC event emitted: event_id=%s sequence_id=%s instrument_run_id=%s status=%s attempt=%s",
             event_id,
+            sequence_orcabus_id,
             instrument_run_id,
             event_status,
             attempt_count,
@@ -117,8 +125,9 @@ def emit_srsc_api_event(event: dict, attempt_count: int = 1):
         return response
     except Exception:
         logger.exception(
-            "Failed to emit SRSC event: event_id=%s instrument_run_id=%s status=%s attempt=%s",
+            "Failed to emit SRSC event: event_id=%s sequence_id=%s instrument_run_id=%s status=%s attempt=%s",
             event_id,
+            sequence_orcabus_id,
             instrument_run_id,
             event_status,
             attempt_count,

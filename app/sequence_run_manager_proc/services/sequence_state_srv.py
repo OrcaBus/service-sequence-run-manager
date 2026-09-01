@@ -1,3 +1,4 @@
+import hashlib
 import logging
 
 from django.db import transaction
@@ -8,6 +9,63 @@ from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Semver of the SRSC event contract, emitted as `detail.version`.
+#   1.1.0 -- `orcabusId` carries the Sequence OrcaBus id (it used to be `id`),
+#            `id` became a content hash, and the optional `stateCreatedBy` was
+#            added for user-created states.
+SRSC_SCHEMA_VERSION = "1.1.0"
+
+
+def get_srsc_hash(srsc: SequenceRunStateChange) -> str:
+    """Content hash identifying an SRSC data event, for deduplication.
+
+    Derived from the fields that make a state change distinct: the schema
+    version, the sequence identity, the announced status and — for
+    user-created states — the state's author. Timestamps are deliberately left
+    out so that re-announcing an unchanged state yields the same id.
+
+    An id that is already set is returned untouched, so calling this twice on
+    the same event is a no-op.
+    """
+    if srsc.id:
+        return srsc.id
+
+    keywords = [
+        srsc.version,
+        srsc.orcabusId,
+        srsc.instrumentRunId,
+        srsc.status,
+    ]
+    if srsc.stateCreatedBy:
+        keywords.append(srsc.stateCreatedBy)
+
+    # Drop empties and sort so field order never affects the digest.
+    keywords = sorted(filter(None, keywords))
+
+    md5_object = hashlib.md5()
+    for keyword in keywords:
+        md5_object.update(keyword.encode("utf-8"))
+    return md5_object.hexdigest()
+
+
+def _authorless_exclude(srsc: SequenceRunStateChange) -> set | None:
+    """Fields to drop for system-originated states, which have no author."""
+    return {"stateCreatedBy"} if srsc.stateCreatedBy is None else None
+
+
+def srsc_event_detail(srsc: SequenceRunStateChange) -> dict:
+    """Serialize an SRSC event to its EventBridge detail dict.
+
+    `stateCreatedBy` is dropped for authorless states rather than being sent as
+    an explicit null.
+    """
+    return srsc.model_dump(mode="json", exclude=_authorless_exclude(srsc))
+
+
+def srsc_event_detail_json(srsc: SequenceRunStateChange) -> str:
+    """Serialize an SRSC event to its EventBridge detail JSON string."""
+    return srsc.model_dump_json(exclude=_authorless_exclude(srsc))
 
 
 @transaction.atomic
@@ -38,11 +96,14 @@ def map_sequence_run_new_state_to_srsc(
     """
     Map a persisted sequence run state to a SequenceRunStateChange event.
 
-    Sequence metadata comes from the Sequence row, while status comes from the
-    newly created State row that triggered the API event.
+    Sequence metadata comes from the Sequence row, while status and author come
+    from the newly created State row that triggered the API event. `id` is a
+    content hash of the event; the Sequence is identified by `orcabusId`.
     """
-    return SequenceRunStateChange(
-        id=sequence.orcabus_id,
+    srsc = SequenceRunStateChange(
+        id="",
+        version=SRSC_SCHEMA_VERSION,
+        orcabusId=sequence.orcabus_id,
         instrumentRunId=sequence.instrument_run_id,
         runVolumeName=sequence.run_volume_name or "",
         runFolderPath=sequence.run_folder_path or "",
@@ -51,4 +112,7 @@ def map_sequence_run_new_state_to_srsc(
         startTime=sequence.start_time,
         endTime=sequence.end_time,
         status=new_state.status or "",
+        stateCreatedBy=new_state.created_by,
     )
+    srsc.id = get_srsc_hash(srsc)
+    return srsc

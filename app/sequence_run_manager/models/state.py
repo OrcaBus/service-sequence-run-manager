@@ -16,6 +16,11 @@ class State(OrcaBusBaseModel):
     timestamp = models.DateTimeField()
     comment = models.CharField(max_length=255, null=True, blank=True)
 
+    # Normalized email of the user who created this state through the API.
+    # Null for system-generated states (BSSH events) and for states that
+    # predate creator auditing; no ownership is inferred for those.
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+
     sequence = models.ForeignKey(
         Sequence, on_delete=models.CASCADE, related_name="states"
     )

@@ -11,6 +11,11 @@ from sequence_run_manager_proc.domain.events.srsc import (
     SequenceRunStateChange,
     AWSEvent,
 )
+from sequence_run_manager_proc.services.sequence_state_srv import (
+    SRSC_SCHEMA_VERSION,
+    get_srsc_hash,
+    srsc_event_detail_json,
+)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -60,8 +65,10 @@ class SequenceDomain:
         else:
             raise SequenceRuleError("Sequence status is null or not loaded yet")
 
-        return SequenceRunStateChange(
-            id=self.sequence.orcabus_id,
+        srsc = SequenceRunStateChange(
+            id="",
+            version=SRSC_SCHEMA_VERSION,
+            orcabusId=self.sequence.orcabus_id,
             instrumentRunId=self.sequence.instrument_run_id,
             runVolumeName=self.sequence.run_volume_name,
             runFolderPath=self.sequence.run_folder_path,
@@ -70,7 +77,12 @@ class SequenceDomain:
             startTime=self.sequence.start_time,
             endTime=self.sequence.end_time,
             sampleSheetName=self.sequence.sample_sheet_name,
+            # System-originated state: no author, so `stateCreatedBy` is omitted
+            # from the emitted detail.
+            stateCreatedBy=None,
         )
+        srsc.id = get_srsc_hash(srsc)
+        return srsc
 
     def to_event_with_envelope(self) -> AWSEvent:
         """Convert from Entity model to Domain event object with envelope"""
@@ -86,7 +98,7 @@ class SequenceDomain:
         """Convert Domain event with envelope to Entry dict struct of PutEvent API"""
         domain_event_with_envelope = self.to_event_with_envelope()
         entry = {
-            "Detail": domain_event_with_envelope.detail.model_dump_json(),
+            "Detail": srsc_event_detail_json(domain_event_with_envelope.detail),
             "DetailType": domain_event_with_envelope.detail_type,
             "Resources": [],
             "Source": domain_event_with_envelope.source,
