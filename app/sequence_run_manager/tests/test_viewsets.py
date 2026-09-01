@@ -47,6 +47,7 @@ def _make_bearer_token(email: str) -> str:
 
 class SequenceViewSetTestCase(TestCase):
     sequence_run_endpoint = f"/{api_base}sequence_run"
+    state_transition_endpoint = f"/{api_base}sequence_run/state"
     sequence_endpoint = f"/{api_base}sequence"
     sample_sheet_endpoint = f"/{api_base}sample_sheet"
     stats_sequence_run_status_counts_endpoint = (
@@ -470,6 +471,19 @@ class SequenceViewSetTestCase(TestCase):
             {"RESOLVED": ["FAILED"], "DEPRECATED": ["SUCCEEDED"]},
         )
 
+    def test_get_states_transition_validation_map_on_transition_endpoint(self):
+        """
+        python manage.py test sequence_run_manager.tests.test_viewsets.SequenceViewSetTestCase.test_get_states_transition_validation_map_on_transition_endpoint
+        """
+        response = self.client.get(
+            f"{self.state_transition_endpoint}/get_states_transition_validation_map/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data,
+            {"RESOLVED": ["FAILED"], "DEPRECATED": ["SUCCEEDED"]},
+        )
+
     def test_state_transition_mixin_validation_rules(self):
         mixin = StateTransitionMixin()
 
@@ -545,16 +559,51 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("comment", response.data.get("detail", "").lower())
 
-    def test_create_state_requires_status_and_comment(self):
+    def test_state_transition_requires_ids_and_comment(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        missing_comment = self.client.post(
+            f"{self.state_transition_endpoint}/resolve/",
+            {"sequenceRunOrcabusIds": [sequence_run.orcabus_id]},
+            format="json",
+        )
+        self.assertEqual(missing_comment.status_code, 400)
+        self.assertIn("comment", missing_comment.data)
+
+        missing_ids = self.client.post(
+            f"{self.state_transition_endpoint}/resolve/",
+            {"comment": "Handled"},
+            format="json",
+        )
+        self.assertEqual(missing_ids.status_code, 400)
+        self.assertIn("sequence_run_orcabus_ids", missing_ids.data)
+
+    def test_state_transition_post_to_state_list_is_not_allowed(self):
+        """The generic POST /state/ endpoint is replaced by the dedicated transitions."""
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "RESOLVED"},
+            {"status": "RESOLVED", "comment": "Handled"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 405)
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_state_transition_sequence_run_not_found(self, mock_emit_srsc_event):
+        response = self.client.post(
+            f"{self.state_transition_endpoint}/resolve/",
+            {
+                "sequenceRunOrcabusIds": ["seq.01J5M2J44HFJ9424G7074NKTGN"],
+                "comment": "Handled",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["created_count"], 0)
+        self.assertEqual(response.data["failed_count"], 1)
+        self.assertEqual(response.data["failures"][0]["reason"], "NOT_FOUND")
+        mock_emit_srsc_event.assert_not_called()
 
-    def test_create_state_invalid_transition(self):
+    def test_state_transition_invalid_transition(self):
         """Sequence status wins even when the latest state allows the transition."""
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
@@ -564,14 +613,22 @@ class SequenceViewSetTestCase(TestCase):
             comment="failed",
         )
         response = self.client.post(
-            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "RESOLVED", "comment": "Cannot from SUCCEEDED"},
+            f"{self.state_transition_endpoint}/resolve/",
+            {
+                "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                "comment": "Cannot from SUCCEEDED",
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["created_count"], 0)
+        self.assertEqual(response.data["failures"][0]["reason"], "INVALID_TRANSITION")
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_revalidates_locked_sequence_status(
+    def test_state_transition_revalidates_locked_sequence_status(
         self, mock_emit_srsc_event
     ):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -592,12 +649,16 @@ class SequenceViewSetTestCase(TestCase):
                 "sequence_run_manager.viewsets.state", level="WARNING"
             ) as logs:
                 response = self.client.post(
-                    f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-                    {"status": "RESOLVED", "comment": "Handled"},
+                    f"{self.state_transition_endpoint}/resolve/",
+                    {
+                        "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                        "comment": "Handled",
+                    },
                     format="json",
                 )
 
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["failures"][0]["reason"], "INVALID_TRANSITION")
         self.assertIn("concurrent_update=true", " ".join(logs.output))
         self.assertFalse(
             State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
@@ -606,10 +667,10 @@ class SequenceViewSetTestCase(TestCase):
         mock_emit_srsc_event.assert_not_called()
 
     @patch(
-        "sequence_run_manager.viewsets.state.StateViewSet.create_state_and_build_srsc",
+        "sequence_run_manager.viewsets.state.SequenceRunStateTransitionViewSet.create_state_and_build_srsc",
         side_effect=DatabaseError("database unavailable"),
     )
-    def test_create_state_database_failure_returns_error_and_rolls_back_state(
+    def test_state_transition_database_failure_returns_error_and_rolls_back_state(
         self, mock_create_state_and_build_srsc
     ):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -623,21 +684,26 @@ class SequenceViewSetTestCase(TestCase):
         )
 
         response = self.client.post(
-            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-            {"status": "RESOLVED", "comment": "Handled"},
+            f"{self.state_transition_endpoint}/resolve/",
+            {
+                "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                "comment": "Handled",
+            },
             format="json",
         )
 
         self.assertEqual(response.status_code, 500)
-        self.assertIn("rolled back", response.data["detail"])
-        self.assertIn("correlation_id", response.data)
+        self.assertEqual(response.data["created_count"], 0)
+        failure = response.data["failures"][0]
+        self.assertEqual(failure["reason"], "STATE_CREATION_FAILED")
+        self.assertIn("rolled back", failure["detail"])
         self.assertFalse(
             State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
         )
         mock_create_state_and_build_srsc.assert_called_once()
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_resolved_after_failed(self, mock_emit_srsc_event):
+    def test_state_transition_resolve_after_failed(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -649,13 +715,21 @@ class SequenceViewSetTestCase(TestCase):
         )
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
-                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-                {"status": "RESOLVED", "comment": "Handled"},
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                    "comment": "Handled",
+                },
                 format="json",
             )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["status"], "RESOLVED")
-        self.assertEqual(response.data["comment"], "Handled")
+        self.assertEqual(response.data["created_count"], 1)
+        self.assertEqual(response.data["failed_count"], 0)
+        self.assertEqual(
+            response.data["sequence_run_orcabus_ids"], [sequence_run.orcabus_id]
+        )
+        state = State.objects.get(sequence=sequence_run, status="RESOLVED")
+        self.assertEqual(state.comment, "Handled")
         sequence_run.refresh_from_db()
         self.assertEqual(
             sequence_run.status,
@@ -673,7 +747,7 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(srsc_event["status"], "RESOLVED")
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_deprecated_after_succeeded(self, mock_emit_srsc_event):
+    def test_state_transition_deprecate_after_succeeded(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -683,12 +757,18 @@ class SequenceViewSetTestCase(TestCase):
         )
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
-                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-                {"status": "DEPRECATED", "comment": "No longer used"},
+                f"{self.state_transition_endpoint}/deprecate/",
+                {
+                    "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                    "comment": "No longer used",
+                },
                 format="json",
             )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data["status"], "DEPRECATED")
+        self.assertEqual(response.data["created_count"], 1)
+        self.assertTrue(
+            State.objects.filter(sequence=sequence_run, status="DEPRECATED").exists()
+        )
         sequence_run.refresh_from_db()
         self.assertEqual(
             sequence_run.status,
@@ -701,7 +781,35 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(srsc_event["status"], "DEPRECATED")
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_publish_failure_is_logged_after_commit(
+    def test_state_transition_partial_success_returns_207(self, mock_emit_srsc_event):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [
+                        sequence_run.orcabus_id,
+                        "seq.01J5M2J44HFJ9424G7074NKTGN",
+                    ],
+                    "comment": "Handled",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 207)
+        self.assertEqual(response.data["created_count"], 1)
+        self.assertEqual(
+            response.data["sequence_run_orcabus_ids"], [sequence_run.orcabus_id]
+        )
+        self.assertEqual(response.data["failed_count"], 1)
+        self.assertEqual(response.data["failures"][0]["reason"], "NOT_FOUND")
+        mock_emit_srsc_event.assert_called_once()
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_state_transition_publish_failure_is_logged_after_commit(
         self, mock_emit_srsc_event
     ):
         mock_emit_srsc_event.side_effect = RuntimeError("event bus unavailable")
@@ -719,8 +827,11 @@ class SequenceViewSetTestCase(TestCase):
         ) as logs:
             with self.captureOnCommitCallbacks(execute=True):
                 response = self.client.post(
-                    f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-                    {"status": "RESOLVED", "comment": "Handled"},
+                    f"{self.state_transition_endpoint}/resolve/",
+                    {
+                        "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                        "comment": "Handled",
+                    },
                     format="json",
                 )
 
@@ -736,7 +847,7 @@ class SequenceViewSetTestCase(TestCase):
         self.assertIn("recoverable=true", logged)
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_defers_srsc_publication_until_commit(
+    def test_state_transition_defers_srsc_publication_until_commit(
         self, mock_emit_srsc_event
     ):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
@@ -745,8 +856,11 @@ class SequenceViewSetTestCase(TestCase):
 
         with self.captureOnCommitCallbacks(execute=False) as callbacks:
             response = self.client.post(
-                f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
-                {"status": "RESOLVED", "comment": "Handled"},
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                    "comment": "Handled",
+                },
                 format="json",
             )
             mock_emit_srsc_event.assert_not_called()
@@ -757,7 +871,7 @@ class SequenceViewSetTestCase(TestCase):
         mock_emit_srsc_event.assert_called_once()
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
-    def test_create_state_only_deprecated_when_no_current_sequence_status(
+    def test_state_transition_only_deprecate_when_no_current_sequence_status(
         self, mock_emit_srsc_event
     ):
         orphan = Sequence.objects.create(
@@ -776,20 +890,25 @@ class SequenceViewSetTestCase(TestCase):
             experiment_name="Exp",
         )
         bad = self.client.post(
-            f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
-            {"status": "RESOLVED", "comment": "x"},
+            f"{self.state_transition_endpoint}/resolve/",
+            {"sequenceRunOrcabusIds": [orphan.orcabus_id], "comment": "x"},
             format="json",
         )
         self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.data["failures"][0]["reason"], "INVALID_TRANSITION")
+        self.assertIn("No current state found", bad.data["failures"][0]["detail"])
         mock_emit_srsc_event.assert_not_called()
         with self.captureOnCommitCallbacks(execute=True):
             good = self.client.post(
-                f"{self.sequence_run_endpoint}/{orphan.orcabus_id}/state/",
-                {"status": "DEPRECATED", "comment": "initial"},
+                f"{self.state_transition_endpoint}/deprecate/",
+                {"sequenceRunOrcabusIds": [orphan.orcabus_id], "comment": "initial"},
                 format="json",
             )
         self.assertEqual(good.status_code, 201)
-        self.assertEqual(good.data["status"], "DEPRECATED")
+        self.assertEqual(good.data["created_count"], 1)
+        self.assertTrue(
+            State.objects.filter(sequence=orphan, status="DEPRECATED").exists()
+        )
         mock_emit_srsc_event.assert_called_once()
         srsc_event = mock_emit_srsc_event.call_args.args[0]
         self.assertEqual(srsc_event["id"], orphan.orcabus_id)
@@ -951,7 +1070,7 @@ class StateTransitionConcurrencyTestCase(TransactionTestCase):
     """Exercise real row-lock behavior using separate database connections."""
 
     reset_sequences = True
-    sequence_run_endpoint = f"/{api_base}sequence_run"
+    state_transition_endpoint = f"/{api_base}sequence_run/state"
 
     def setUp(self):
         self.sequence = Sequence.objects.create(
@@ -972,22 +1091,25 @@ class StateTransitionConcurrencyTestCase(TransactionTestCase):
         self, mock_emit_srsc_event
     ):
         initial_read_barrier = Barrier(2)
-        original_get = Sequence.objects.get
+        original_filter = Sequence.objects.filter
         responses = []
         errors = []
 
-        def synchronized_initial_get(*args, **kwargs):
-            sequence = original_get(*args, **kwargs)
+        def synchronized_initial_filter(*args, **kwargs):
+            sequences = list(original_filter(*args, **kwargs))
             initial_read_barrier.wait(timeout=5)
-            return sequence
+            return sequences
 
         def post_transition():
             close_old_connections()
             try:
                 client = APIClient()
                 response = client.post(
-                    f"{self.sequence_run_endpoint}/{self.sequence.orcabus_id}/state/",
-                    {"status": "RESOLVED", "comment": "Handled"},
+                    f"{self.state_transition_endpoint}/resolve/",
+                    {
+                        "sequenceRunOrcabusIds": [self.sequence.orcabus_id],
+                        "comment": "Handled",
+                    },
                     format="json",
                 )
                 responses.append(response.status_code)
@@ -998,8 +1120,8 @@ class StateTransitionConcurrencyTestCase(TransactionTestCase):
 
         with patch.object(
             Sequence.objects,
-            "get",
-            side_effect=synchronized_initial_get,
+            "filter",
+            side_effect=synchronized_initial_filter,
         ):
             threads = [Thread(target=post_transition) for _ in range(2)]
             for thread in threads:

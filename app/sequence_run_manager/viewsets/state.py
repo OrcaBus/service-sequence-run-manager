@@ -1,7 +1,12 @@
 import logging
 from functools import partial
 
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+    extend_schema_view,
+)
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.viewsets import GenericViewSet
 from rest_framework import mixins, status
@@ -13,14 +18,50 @@ from sequence_run_manager.aws_event_bridge.event_srv import emit_srsc_api_event
 from sequence_run_manager.models import State, Sequence
 from sequence_run_manager.serializers.state import (
     StateSerializer,
-    StateCreateRequestSerializer,
     StateUpdateRequestSerializer,
+    StateTransitionRequestSerializer,
+    StateTransitionResponseSerializer,
+    StateTransitionValidationErrorSerializer,
 )
 from sequence_run_manager_proc.services.sequence_state_srv import (
     map_sequence_run_new_state_to_srsc,
 )
 
 logger = logging.getLogger(__name__)
+
+
+STATE_TRANSITION_RESPONSES = {
+    status.HTTP_201_CREATED: OpenApiResponse(
+        response=StateTransitionResponseSerializer,
+        description="Every requested sequence run was transitioned successfully.",
+    ),
+    status.HTTP_207_MULTI_STATUS: OpenApiResponse(
+        response=StateTransitionResponseSerializer,
+        description="Some sequence runs were transitioned and some failed.",
+    ),
+    status.HTTP_400_BAD_REQUEST: OpenApiResponse(
+        response=PolymorphicProxySerializer(
+            component_name="SequenceRunStateTransitionBadRequest",
+            serializers=[
+                StateTransitionValidationErrorSerializer,
+                StateTransitionResponseSerializer,
+            ],
+            resource_type_field_name=None,
+        ),
+        description=(
+            "The request body failed serializer validation, or every requested "
+            "transition failed because a sequence run was not found or the "
+            "transition was invalid."
+        ),
+    ),
+    status.HTTP_500_INTERNAL_SERVER_ERROR: OpenApiResponse(
+        response=StateTransitionResponseSerializer,
+        description=(
+            "No requested transition succeeded, and at least one failed during "
+            "state creation."
+        ),
+    ),
+}
 
 
 class InvalidStateTransition(ValueError):
@@ -40,12 +81,19 @@ class StateTransitionMixin:
 
     refer:
         "Resolved" -- https://github.com/umccr/orcabus/issues/879
+        "Deprecated" -- https://github.com/OrcaBus/service-sequence-run-manager/issues/19
     """
 
     states_transition_validation_map = {
         "RESOLVED": ["FAILED"],
         "DEPRECATED": ["SUCCEEDED"],
     }
+
+    @staticmethod
+    def normalize_sequence_run_orcabus_id(orcabus_id: str) -> str:
+        if orcabus_id.startswith("seq."):
+            return orcabus_id[4:]
+        return orcabus_id
 
     def is_valid_next_state(self, current_status, request_status: str) -> bool:
         """
@@ -162,15 +210,24 @@ class StateTransitionMixin:
             request_status,
         )
 
+    @staticmethod
+    def _failure_response_status(failures: list[dict]) -> int:
+        """Choose the most helpful HTTP status when no transition succeeds.
+
+        - All client-side reasons (NOT_FOUND, INVALID_TRANSITION) -> 400
+        - Anything else (state creation failed) -> 500
+
+        SRSC emission happens after the database commit, so an emission failure
+        cannot fail a transition; it is logged as recoverable instead.
+        """
+        client_failure_reasons = {"NOT_FOUND", "INVALID_TRANSITION"}
+        reasons = {failure.get("reason") for failure in failures}
+        if reasons <= client_failure_reasons:
+            return status.HTTP_400_BAD_REQUEST
+        return status.HTTP_500_INTERNAL_SERVER_ERROR
+
 
 @extend_schema_view(
-    create=extend_schema(
-        request=StateCreateRequestSerializer,
-        responses={201: StateSerializer},
-        description=(
-            "Create a state (body: status, comment; JSON uses camelCase per API settings)."
-        ),
-    ),
     partial_update=extend_schema(
         request=StateUpdateRequestSerializer,
         responses={200: StateSerializer},
@@ -179,14 +236,14 @@ class StateTransitionMixin:
 )
 class StateViewSet(
     StateTransitionMixin,
-    mixins.CreateModelMixin,
     mixins.UpdateModelMixin,
     mixins.ListModelMixin,
     GenericViewSet,
 ):
+    get_success_headers = mixins.CreateModelMixin.get_success_headers
     serializer_class = StateSerializer
     search_fields = State.get_base_fields()
-    http_method_names = ["get", "post", "patch"]
+    http_method_names = ["get", "patch"]
     pagination_class = None
     lookup_value_regex = "[^/]+"  # to allow id prefix
 
@@ -208,122 +265,6 @@ class StateViewSet(
         Returns states transition validation map.
         """
         return Response(self.states_transition_validation_map)
-
-    def create(self, request, *args, **kwargs):
-        """
-        Create a customed new state for a sequence run.
-        Currently we support "Resolved"
-        """
-        required_fields = {"status", "comment"}
-        provided_fields = set(request.data.keys())
-
-        if required_fields - provided_fields:
-            return Response(
-                {"detail": "status and comment fields are required."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        sequence_orcabus_id = self.kwargs.get("orcabus_id")
-        sequence = Sequence.objects.get(orcabus_id=sequence_orcabus_id)
-        observed_status = sequence.status
-
-        body = StateCreateRequestSerializer(data=request.data)
-        body.is_valid(raise_exception=True)
-        vd = body.validated_data
-        request_status = vd["status"].upper()
-        request_comment = vd["comment"]
-
-        try:
-            with transaction.atomic():
-                # The Sequence row is the shared lock target for every state
-                # transition, including sequences that do not have State rows.
-                sequence = Sequence.objects.select_for_update().get(
-                    orcabus_id=sequence_orcabus_id
-                )
-                current_status = sequence.status
-
-                if current_status != observed_status:
-                    logger.warning(
-                        "Sequence status changed before transition lock was acquired: "
-                        "sequence_id=%s requested_status=%s observed_status=%s "
-                        "locked_status=%s concurrent_update=true",
-                        sequence_orcabus_id,
-                        request_status,
-                        observed_status,
-                        current_status,
-                    )
-
-                if not self.is_valid_next_state(current_status, request_status):
-                    logger.warning(
-                        "Manual state transition rejected after locked validation: "
-                        "sequence_id=%s requested_status=%s current_status=%s",
-                        sequence_orcabus_id,
-                        request_status,
-                        current_status,
-                    )
-                    if current_status is None:
-                        raise InvalidStateTransition(
-                            "No current state found for workflow run '{}'. Only "
-                            "DEPRECATED is allowed when there is no current state.".format(
-                                sequence_orcabus_id
-                            )
-                        )
-                    raise InvalidStateTransition(
-                        "Invalid state request. Can't add state '{}' to '{}'".format(
-                            request_status, current_status
-                        )
-                    )
-
-                instance, srsc_event = self.create_state_and_build_srsc(
-                    sequence,
-                    request_status,
-                    request_comment,
-                )
-                transaction.on_commit(
-                    partial(
-                        self.publish_srsc_after_commit,
-                        srsc_event=srsc_event,
-                        sequence_id=str(sequence.orcabus_id),
-                        state_id=str(instance.orcabus_id),
-                        request_status=request_status,
-                    ),
-                    robust=True,
-                )
-        except InvalidStateTransition as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except DatabaseError:
-            logger.exception(
-                "Manual state transition failed during database operation and was rolled back: sequence_id=%s requested_status=%s",
-                sequence_orcabus_id,
-                request_status,
-            )
-            return Response(
-                {
-                    "detail": "Failed to create sequence-run state. The operation was rolled back.",
-                    "correlation_id": f"{sequence_orcabus_id}:{request_status}",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        except Exception:
-            logger.exception(
-                "Manual state transition failed before commit and was rolled back: sequence_id=%s requested_status=%s",
-                sequence_orcabus_id,
-                request_status,
-            )
-            return Response(
-                {
-                    "detail": "Failed to create sequence-run state. The operation was rolled back.",
-                    "correlation_id": f"{sequence_orcabus_id}:{request_status}",
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        data = StateSerializer(instance).data
-        headers = self.get_success_headers(data)
-        return Response(data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         """
@@ -356,3 +297,248 @@ class StateViewSet(
         data = StateSerializer(instance).data
         headers = self.get_success_headers(data)
         return Response(data, status=status.HTTP_200_OK, headers=headers)
+
+
+class SequenceRunStateTransitionViewSet(StateTransitionMixin, GenericViewSet):
+    """User-initiated sequence run state transitions for one or more runs."""
+
+    http_method_names = ["get", "post"]
+    pagination_class = None
+
+    @extend_schema(
+        # Distinct from the same map served under
+        # /sequence_run/{orcabusId}/state/, which otherwise collides on operationId.
+        operation_id="apiV1SequenceRunStateTransitionValidationMapRetrieve",
+        responses=OpenApiTypes.OBJECT,
+        description="Get states transition validation map.",
+    )
+    @action(
+        detail=False,
+        methods=["get"],
+        url_name="get_states_transition_validation_map",
+        url_path="get_states_transition_validation_map",
+    )
+    def get_states_transition_validation_map(self, request, **kwargs):
+        """Return the state transition validation map."""
+        return Response(self.states_transition_validation_map)
+
+    def _transition_one(
+        self,
+        sequence: Sequence,
+        normalized_id: str,
+        request_status: str,
+        request_comment: str,
+    ) -> State:
+        """Transition a single sequence run under a row lock.
+
+        The Sequence row is the shared lock target for every state transition,
+        including sequences that do not have State rows. ``sequence.status`` read
+        before the lock is compared with the locked value so a concurrent update
+        is visible in the logs.
+
+        Raises:
+            InvalidStateTransition: The locked status does not allow request_status.
+        """
+        observed_status = sequence.status
+
+        with transaction.atomic():
+            locked_sequence = Sequence.objects.select_for_update().get(
+                orcabus_id=normalized_id
+            )
+            current_status = locked_sequence.status
+
+            if current_status != observed_status:
+                logger.warning(
+                    "Sequence status changed before transition lock was acquired: "
+                    "sequence_id=%s requested_status=%s observed_status=%s "
+                    "locked_status=%s concurrent_update=true",
+                    sequence.orcabus_id,
+                    request_status,
+                    observed_status,
+                    current_status,
+                )
+
+            if not self.is_valid_next_state(current_status, request_status):
+                logger.warning(
+                    "Manual state transition rejected after locked validation: "
+                    "sequence_id=%s requested_status=%s current_status=%s",
+                    sequence.orcabus_id,
+                    request_status,
+                    current_status,
+                )
+                if current_status is None:
+                    raise InvalidStateTransition(
+                        "No current state found for sequence run '{}'. Only "
+                        "DEPRECATED is allowed when there is no current state.".format(
+                            sequence.orcabus_id
+                        )
+                    )
+                raise InvalidStateTransition(
+                    "Invalid state request. Can't add state '{}' to sequence run '{}' from '{}'".format(
+                        request_status,
+                        sequence.orcabus_id,
+                        current_status,
+                    )
+                )
+
+            instance, srsc_event = self.create_state_and_build_srsc(
+                locked_sequence,
+                request_status,
+                request_comment,
+            )
+            transaction.on_commit(
+                partial(
+                    self.publish_srsc_after_commit,
+                    srsc_event=srsc_event,
+                    sequence_id=str(locked_sequence.orcabus_id),
+                    state_id=str(instance.orcabus_id),
+                    request_status=request_status,
+                ),
+                robust=True,
+            )
+
+        return instance
+
+    def _state_transition(self, request, request_status: str):
+        body = StateTransitionRequestSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        vd = body.validated_data
+
+        sequence_run_orcabus_ids = vd["sequence_run_orcabus_ids"]
+        request_comment = vd["comment"]
+
+        normalized_ids = [
+            self.normalize_sequence_run_orcabus_id(orcabus_id)
+            for orcabus_id in sequence_run_orcabus_ids
+        ]
+        sequences = list(Sequence.objects.filter(orcabus_id__in=normalized_ids))
+        sequences_by_normalized_id = {
+            self.normalize_sequence_run_orcabus_id(sequence.orcabus_id): sequence
+            for sequence in sequences
+        }
+
+        created_sequence_run_ids = []
+        failures = []
+
+        for raw_id, normalized_id in zip(sequence_run_orcabus_ids, normalized_ids):
+            sequence = sequences_by_normalized_id.get(normalized_id)
+            if not sequence:
+                logger.warning(
+                    "Manual state transition skipped missing sequence run: sequence_id=%s requested_status=%s",
+                    raw_id,
+                    request_status,
+                )
+                failures.append(
+                    {
+                        "sequence_run_orcabus_id": raw_id,
+                        "reason": "NOT_FOUND",
+                        "detail": "Sequence run not found.",
+                    }
+                )
+                continue
+
+            try:
+                state_instance = self._transition_one(
+                    sequence,
+                    normalized_id,
+                    request_status,
+                    request_comment,
+                )
+            except InvalidStateTransition as exc:
+                failures.append(
+                    {
+                        "sequence_run_orcabus_id": sequence.orcabus_id,
+                        "reason": "INVALID_TRANSITION",
+                        "detail": str(exc),
+                    }
+                )
+                continue
+            except DatabaseError:
+                logger.exception(
+                    "Manual state transition failed during database operation and was rolled back: "
+                    "sequence_id=%s requested_status=%s",
+                    sequence.orcabus_id,
+                    request_status,
+                )
+                failures.append(
+                    {
+                        "sequence_run_orcabus_id": sequence.orcabus_id,
+                        "reason": "STATE_CREATION_FAILED",
+                        "detail": "Failed to create sequence-run state. The operation was rolled back.",
+                    }
+                )
+                continue
+            except Exception:
+                logger.exception(
+                    "Manual state transition failed before commit and was rolled back: "
+                    "sequence_id=%s requested_status=%s",
+                    sequence.orcabus_id,
+                    request_status,
+                )
+                failures.append(
+                    {
+                        "sequence_run_orcabus_id": sequence.orcabus_id,
+                        "reason": "STATE_CREATION_FAILED",
+                        "detail": "Failed to create sequence-run state. The operation was rolled back.",
+                    }
+                )
+                continue
+
+            created_sequence_run_ids.append(sequence.orcabus_id)
+            logger.info(
+                "Manual state transition completed: sequence_id=%s state_id=%s status=%s",
+                sequence.orcabus_id,
+                state_instance.orcabus_id,
+                request_status,
+            )
+
+        response_status = status.HTTP_201_CREATED
+        if failures:
+            response_status = (
+                status.HTTP_207_MULTI_STATUS
+                if created_sequence_run_ids
+                else self._failure_response_status(failures)
+            )
+
+        summary = StateTransitionResponseSerializer(
+            instance={
+                "created_count": len(created_sequence_run_ids),
+                "sequence_run_orcabus_ids": created_sequence_run_ids,
+                "failed_count": len(failures),
+                "failures": failures,
+            }
+        )
+        logger.info(
+            "Manual state transition finished: requested_status=%s created_count=%s failed_count=%s response_status=%s",
+            request_status,
+            len(created_sequence_run_ids),
+            len(failures),
+            response_status,
+        )
+        return Response(summary.data, status=response_status)
+
+    @extend_schema(
+        request=StateTransitionRequestSerializer,
+        responses=STATE_TRANSITION_RESPONSES,
+        summary="Mark sequence runs as deprecated",
+        description=(
+            "Transition sequence runs from SUCCEEDED to DEPRECATED, and emit an SRSC "
+            "event for each transitioned run once the transaction commits."
+        ),
+    )
+    @action(detail=False, methods=["post"], url_path="deprecate")
+    def deprecate(self, request, *args, **kwargs):
+        return self._state_transition(request, "DEPRECATED")
+
+    @extend_schema(
+        request=StateTransitionRequestSerializer,
+        responses=STATE_TRANSITION_RESPONSES,
+        summary="Mark sequence runs as resolved",
+        description=(
+            "Transition sequence runs from FAILED to RESOLVED, and emit an SRSC "
+            "event for each transitioned run once the transaction commits."
+        ),
+    )
+    @action(detail=False, methods=["post"], url_path="resolve")
+    def resolve(self, request, *args, **kwargs):
+        return self._state_transition(request, "RESOLVED")
