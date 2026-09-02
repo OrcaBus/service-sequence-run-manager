@@ -10,7 +10,9 @@ minimumReleaseAgeExclude:
   - brace-expansion@5.0.9
   - brace-expansion@2.1.4
   - brace-expansion@1.1.18
+  - browserslist@4.28.7
 overrides:
   brace-expansion@<1.1.18: ^1.1.18
   brace-expansion@>=2.0.0 <2.1.4: ^2.1.4
   brace-expansion@>=3.0.0 <5.0.9: ^5.0.9
+  browserslist@<=4.28.6: ^4.28.7
