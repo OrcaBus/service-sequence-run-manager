@@ -871,6 +871,7 @@ class SequenceViewSetTestCase(TestCase):
         self, mock_create_state_and_build_srsc
     ):
         """A non-DatabaseError raised before commit is reported, not propagated."""
+        self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -911,6 +912,7 @@ class SequenceViewSetTestCase(TestCase):
         self, mock_emit_srsc_event
     ):
         """Ids are accepted both with and without the ``seq.`` prefix."""
+        self.authenticate_state_actor()
         self.assertEqual(
             StateTransitionMixin.normalize_sequence_run_orcabus_id(
                 "01J5M2J44HFJ9424G7074NKTGN"
