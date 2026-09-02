@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 
 from django.db import transaction
@@ -31,22 +32,26 @@ def get_srsc_hash(srsc: SequenceRunStateChange) -> str:
     if srsc.id:
         return srsc.id
 
-    keywords = [
-        srsc.version,
-        srsc.orcabusId,
-        srsc.instrumentRunId,
-        srsc.status,
-    ]
-    if srsc.stateCreatedBy:
-        keywords.append(srsc.stateCreatedBy)
-
-    # Drop empties and sort so field order never affects the digest.
-    keywords = sorted(filter(None, keywords))
-
-    md5_object = hashlib.md5()
-    for keyword in keywords:
-        md5_object.update(keyword.encode("utf-8"))
-    return md5_object.hexdigest()
+    # Hash a canonical JSON object rather than the bare concatenated values:
+    # field names and JSON quoting keep the boundaries between values intact,
+    # so no two different field combinations can produce the same bytes (a
+    # plain concatenation cannot tell ["ab", "c"] from ["a", "bc"]). Keys are
+    # sorted by `json.dumps` so the digest is pinned to the field names, not to
+    # the order they happen to be written in here.
+    content = json.dumps(
+        {
+            "version": srsc.version,
+            "orcabusId": srsc.orcabusId,
+            "instrumentRunId": srsc.instrumentRunId,
+            "status": srsc.status,
+            "stateCreatedBy": srsc.stateCreatedBy,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    # Not a security digest -- md5 is used only as a short, stable dedup key.
+    return hashlib.md5(content.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _authorless_exclude(srsc: SequenceRunStateChange) -> set | None:

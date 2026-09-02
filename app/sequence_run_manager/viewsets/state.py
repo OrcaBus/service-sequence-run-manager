@@ -247,6 +247,9 @@ class StateTransitionMixin:
         request=StateUpdateRequestSerializer,
         responses={
             200: StateSerializer,
+            400: OpenApiResponse(
+                description="Bad request (e.g. missing comment field or state status is not editable)."
+            ),
             401: OpenApiResponse(
                 description="A valid Bearer JWT with an email claim is required."
             ),

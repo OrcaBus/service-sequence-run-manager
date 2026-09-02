@@ -86,6 +86,23 @@ class SrscHashUnitTests(SequenceRunProcUnitTestCase):
         self.assertNotEqual(unauthored, authored)
         self.assertNotEqual(authored, other_author)
 
+    def test_hash_preserves_field_boundaries(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_sequence_state_srv.SrscHashUnitTests.test_hash_preserves_field_boundaries
+        """
+        # Values that concatenate to the same byte stream must still hash
+        # differently, since they describe different state changes.
+        self.assertNotEqual(
+            get_srsc_hash(self.build_srsc(instrumentRunId="ab", status="c")),
+            get_srsc_hash(self.build_srsc(instrumentRunId="a", status="bc")),
+        )
+
+        # The same holds for a value moved from one field to another.
+        self.assertNotEqual(
+            get_srsc_hash(self.build_srsc(status="jane@example.org")),
+            get_srsc_hash(self.build_srsc(stateCreatedBy="jane@example.org")),
+        )
+
     def test_detail_omits_state_created_by_when_unauthored(self):
         """
         python manage.py test sequence_run_manager_proc.tests.test_sequence_state_srv.SrscHashUnitTests.test_detail_omits_state_created_by_when_unauthored
