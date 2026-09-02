@@ -42,3 +42,25 @@ Example events can be validated against their respective JSON schema
 # If the file is not valid this should produce an exception (non-zero return code)
 json validate --schema-file=ASequenceRunStateChange/SequenceRunStateChange.schema.json --document-file=SequenceRunStateChange/examples/SRSC__started.json
 ```
+
+## Schema versioning
+
+Event details carry their own `version` (semver), independent of the AWS
+EventBridge envelope `version`.
+
+### SequenceRunStateChange (SRSC)
+
+| Version | Change                                                                                                                                                                                                                                                                                             |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1.0   | Added `version`, `orcabusId` and the optional `stateCreatedBy`. `detail.id` is now a content hash of the event (useful for deduplication) instead of the Sequence OrcaBus id — **consumers that read the sequence id from `detail.id` must move to `detail.orcabusId`**.                             |
+| 1.0.0   | Initial schema. `detail.id` held the Sequence OrcaBus id and no `version` field was emitted.                                                                                                                                                                                                        |
+
+`stateCreatedBy` is the normalized email of the user who created a custom state
+(`RESOLVED`, `DEPRECATED`) through the API. System-generated states — those
+driven by BSSH events — have no author and omit the field entirely rather than
+sending a null.
+
+The hash covers the schema version, `orcabusId`, `instrumentRunId`, `status` and
+`stateCreatedBy`; timestamps are deliberately excluded so re-announcing an
+unchanged state yields the same id (see
+`app/sequence_run_manager_proc/services/sequence_state_srv.py`).

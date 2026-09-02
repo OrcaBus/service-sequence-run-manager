@@ -34,6 +34,8 @@ definitions:
     type: object
     required:
       - id
+      - version
+      - orcabusId
       - instrumentRunId
       - runVolumeName
       - runFolderPath
@@ -43,6 +45,16 @@ definitions:
       - status
     properties:
       id:
+        # unique id for the data event, e.g. the hashed event data, useful for deduplication.
+        # (This is supposed to only change if the event payload has changed)
+        # NOTE: independent of the AWS event id, and since schema version 1.1.0 no longer
+        # the OrcaBus id of the Sequence - use `orcabusId` for that.
+        type: string
+      version:
+        # the version associated with the event schema version (following semver)
+        type: string
+      orcabusId:
+        # the OrcaBus internal id of the Sequence, e.g. seq.01234EXAMPLE567SEQUENCERUN
         type: string
       instrumentRunId:
         type: string
@@ -65,4 +77,9 @@ definitions:
           - 'null'
         format: date-time
       status:
+        # the current/new state of the Sequence that the event announces
+        type: string
+      stateCreatedBy:
+        # normalized email of the user who created this sequence-run state;
+        # omitted for system-generated states (e.g. BSSH driven) that have no author
         type: string

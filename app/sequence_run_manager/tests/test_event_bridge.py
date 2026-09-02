@@ -17,7 +17,10 @@ from sequence_run_manager.models.sample_sheet import SampleSheet
 class SrscApiEventTestCase(SimpleTestCase):
     def build_event(self):
         return {
-            "id": "seq.01J5M2JFE1JPYV62RYQEG99SEQ",
+            # Content hash of the event, not a credential.
+            "id": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",  # pragma: allowlist secret
+            "version": "1.1.0",
+            "orcabusId": "seq.01J5M2JFE1JPYV62RYQEG99SEQ",
             "instrumentRunId": "250328_A01052_0258_AHFGM7DSXF",
             "runVolumeName": "bssh.example",
             "runFolderPath": "/Runs/250328_A01052_0258_AHFGM7DSXF",
@@ -26,13 +29,12 @@ class SrscApiEventTestCase(SimpleTestCase):
             "startTime": timezone.now().isoformat(),
             "endTime": None,
             "status": "RESOLVED",
+            "stateCreatedBy": "jane.doe@example.org",
         }
 
     @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
     @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
-    def test_emit_srsc_api_event_emits_sequence_run_state_change(
-        self, mock_emit_event
-    ):
+    def test_emit_srsc_api_event_emits_sequence_run_state_change(self, mock_emit_event):
         mock_emit_event.return_value = {"FailedEntryCount": 0, "Entries": [{}]}
 
         emit_srsc_api_event(self.build_event(), attempt_count=2)
@@ -43,14 +45,30 @@ class SrscApiEventTestCase(SimpleTestCase):
         self.assertEqual(entry["EventBusName"], "test-event-bus")
         detail = json.loads(entry["Detail"])
         self.assertEqual(detail["status"], "RESOLVED")
+        self.assertEqual(detail["version"], "1.1.0")
+        self.assertEqual(detail["orcabusId"], "seq.01J5M2JFE1JPYV62RYQEG99SEQ")
+        self.assertEqual(detail["stateCreatedBy"], "jane.doe@example.org")
         self.assertIn("sampleSheetName", detail)
         self.assertIsNone(detail["sampleSheetName"])
 
     @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
     @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
-    def test_emit_srsc_api_event_raises_and_logs_partial_failure(
+    def test_emit_srsc_api_event_omits_state_created_by_when_unauthored(
         self, mock_emit_event
     ):
+        """System-originated states have no author and must not send a null."""
+        mock_emit_event.return_value = {"FailedEntryCount": 0, "Entries": [{}]}
+        event = self.build_event()
+        event.pop("stateCreatedBy")
+
+        emit_srsc_api_event(event)
+
+        detail = json.loads(mock_emit_event.call_args.args[0]["Detail"])
+        self.assertNotIn("stateCreatedBy", detail)
+
+    @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
+    @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
+    def test_emit_srsc_api_event_raises_and_logs_partial_failure(self, mock_emit_event):
         mock_emit_event.return_value = {
             "FailedEntryCount": 1,
             "Entries": [
@@ -151,9 +169,7 @@ class SrsscApiEventTestCase(SimpleTestCase):
 
     @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
     @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
-    def test_emit_srssc_api_event_returns_for_wrong_event_type(
-        self, mock_emit_event
-    ):
+    def test_emit_srssc_api_event_returns_for_wrong_event_type(self, mock_emit_event):
         with self.assertLogs(
             "sequence_run_manager.aws_event_bridge.event_srv", level="ERROR"
         ) as logs:
@@ -200,9 +216,7 @@ class SrllcApiEventTestCase(SimpleTestCase):
 
     @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
     @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
-    def test_emit_srllc_api_event_emits_library_linking_change(
-        self, mock_emit_event
-    ):
+    def test_emit_srllc_api_event_emits_library_linking_change(self, mock_emit_event):
         mock_emit_event.return_value = {"FailedEntryCount": 0, "Entries": [{}]}
 
         response = emit_srllc_api_event(self.build_event())
@@ -231,9 +245,7 @@ class SrllcApiEventTestCase(SimpleTestCase):
 
     @patch.dict(os.environ, {"EVENT_BUS_NAME": "test-event-bus"})
     @patch("sequence_run_manager.aws_event_bridge.event_srv.libeb.emit_event")
-    def test_emit_srllc_api_event_returns_for_wrong_event_type(
-        self, mock_emit_event
-    ):
+    def test_emit_srllc_api_event_returns_for_wrong_event_type(self, mock_emit_event):
         with self.assertLogs(
             "sequence_run_manager.aws_event_bridge.event_srv", level="ERROR"
         ) as logs:
