@@ -702,6 +702,86 @@ class SequenceViewSetTestCase(TestCase):
         )
         mock_create_state_and_build_srsc.assert_called_once()
 
+    @patch(
+        "sequence_run_manager.viewsets.state.SequenceRunStateTransitionViewSet.create_state_and_build_srsc",
+        side_effect=RuntimeError("unexpected boom"),
+    )
+    def test_state_transition_unexpected_failure_returns_error_and_rolls_back_state(
+        self, mock_create_state_and_build_srsc
+    ):
+        """A non-DatabaseError raised before commit is reported, not propagated."""
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+        State.objects.create(
+            sequence=sequence_run,
+            status="FAILED",
+            timestamp=now(),
+            comment="failed",
+        )
+
+        with self.assertLogs(
+            "sequence_run_manager.viewsets.state", level="ERROR"
+        ) as logs:
+            response = self.client.post(
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                    "comment": "Handled",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data["created_count"], 0)
+        failure = response.data["failures"][0]
+        self.assertEqual(failure["reason"], "STATE_CREATION_FAILED")
+        self.assertIn("rolled back", failure["detail"])
+        self.assertIn("rolled back", " ".join(logs.output))
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, SequenceStatus.FAILED)
+        mock_create_state_and_build_srsc.assert_called_once()
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_state_transition_accepts_orcabus_id_without_seq_prefix(
+        self, mock_emit_srsc_event
+    ):
+        """Ids are accepted both with and without the ``seq.`` prefix."""
+        self.assertEqual(
+            StateTransitionMixin.normalize_sequence_run_orcabus_id(
+                "01J5M2J44HFJ9424G7074NKTGN"
+            ),
+            "01J5M2J44HFJ9424G7074NKTGN",
+        )
+
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+        unprefixed_id = StateTransitionMixin.normalize_sequence_run_orcabus_id(
+            sequence_run.orcabus_id
+        )
+        self.assertNotEqual(unprefixed_id, sequence_run.orcabus_id)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [unprefixed_id],
+                    "comment": "Handled",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["created_count"], 1)
+        self.assertTrue(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        mock_emit_srsc_event.assert_called_once()
+
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_state_transition_resolve_after_failed(self, mock_emit_srsc_event):
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
