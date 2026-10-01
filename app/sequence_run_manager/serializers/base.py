@@ -50,3 +50,47 @@ class OrcabusIdSerializerMetaMixin:
     """
 
     extra_kwargs = {"orcabus_id": {"read_only": True}}
+
+
+class OrcabusIdListUtils:
+    """
+    Utilities for normalizing orcabus_id list input from various payload formats.
+    """
+
+    @staticmethod
+    def normalize(ids):
+        """
+        Normalize ID input to a list of strings.
+        Handles form-urlencoded, Swagger payloads, and JSON.
+        """
+        if ids is None:
+            return []
+        if isinstance(ids, str):
+            return [x.strip() for x in ids.split(",") if x.strip()]
+        if isinstance(ids, (list, tuple)):
+            expanded = []
+            for item in ids:
+                if item is None:
+                    continue
+                s = str(item).strip()
+                if not s:
+                    continue
+                if "," in s:
+                    expanded.extend(
+                        [token.strip() for token in s.split(",") if token.strip()]
+                    )
+                else:
+                    expanded.append(s)
+            return expanded
+        return [str(ids)] if ids else []
+
+
+class OrcabusIdListField(serializers.ListField):
+    """
+    Accepts orcabus_ids as list or comma-separated string (form-urlencoded/Swagger).
+    Uses OrcabusIdListUtils.normalize for input parsing.
+    """
+
+    def to_internal_value(self, data):
+        normalized = OrcabusIdListUtils.normalize(data)
+        return super().to_internal_value(normalized)

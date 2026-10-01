@@ -4,7 +4,10 @@ from drf_spectacular.views import SpectacularJSONAPIView, SpectacularSwaggerView
 from sequence_run_manager.routers import OptionalSlashDefaultRouter
 from sequence_run_manager.viewsets.sequence_run import SequenceRunViewSet
 from sequence_run_manager.viewsets.sequence import SequenceViewSet
-from sequence_run_manager.viewsets.state import StateViewSet
+from sequence_run_manager.viewsets.state import (
+    StateViewSet,
+    SequenceRunStateTransitionViewSet,
+)
 from sequence_run_manager.viewsets.comment import CommentViewSet
 from sequence_run_manager.viewsets.sequence_run_stats import SequenceStatsViewSet
 from sequence_run_manager.viewsets.sample_sheet import SampleSheetViewSet
@@ -26,6 +29,11 @@ router.register(
     "sequence_run/(?P<orcabus_id>[^/]+)/state",
     StateViewSet,
     basename="sequence-run-states",
+)
+router.register(
+    "sequence_run/state",
+    SequenceRunStateTransitionViewSet,
+    basename="sequence-run-state-transition",
 )
 router.register(r"stats", SequenceStatsViewSet, basename="stats")
 router.register(r"sample_sheet", SampleSheetViewSet, basename="sample-sheet")
