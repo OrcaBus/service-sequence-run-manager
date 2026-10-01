@@ -25,7 +25,10 @@ class SequenceRunProcUnitTestCase(TestCase):
         when(libsqs).sqs_client(...).thenReturn(mock_sqs)
 
         mock_eb = MagicMock()
-        mock_eb.put_events.return_value = {"FailedEntryCount": 0, "Entries": [{"EventId": "test-event-id"}]}
+        mock_eb.put_events.return_value = {
+            "FailedEntryCount": 0,
+            "Entries": [{"EventId": "test-event-id"}],
+        }
         when(aws).eb_client(...).thenReturn(mock_eb)
         when(libeb).eb_client(...).thenReturn(mock_eb)
 

@@ -267,9 +267,13 @@ validate: openapi
 
 schema-gen: schema-gen-srsc schema-gen-srssc schema-gen-srllc
 
+# Flags: --output-datetime-class datetime keeps plain `datetime` (pydantic's default
+# AwareDatetime would reject timestamps carrying no timezone);
+# --allow-population-by-field-name emits populate_by_name=True so AWSEvent can be built
+# as AWSEvent(detail_type=...) rather than only by its `detail-type` alias.
 schema-gen-srsc:
 	@echo "Generating SRSC schema..."
-	@datamodel-codegen --input ../docs/events/SequenceRunStateChange/SequenceRunStateChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srsc.py
+	@datamodel-codegen --input ../docs/events/SequenceRunStateChange/SequenceRunStateChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srsc.py --output-datetime-class datetime --allow-population-by-field-name
 
 schema-gen-srssc:
 	@echo "Generating SRSSC schema..."

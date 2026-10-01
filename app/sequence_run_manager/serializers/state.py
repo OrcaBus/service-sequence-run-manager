@@ -8,7 +8,8 @@ from rest_framework import serializers
 
 
 class StateBaseSerializer(SerializersBase):
-    pass
+    # Authorship is derived from the caller's Bearer JWT, never from the body.
+    created_by = serializers.CharField(read_only=True, allow_null=True)
 
 
 class StateSerializer(StateBaseSerializer):

@@ -24,10 +24,17 @@ from sequence_run_manager.models.state import State
 
 from sequence_run_manager.urls.base import api_base
 from sequence_run_manager.viewsets.state import StateTransitionMixin
+from sequence_run_manager_proc.domain.events.srsc import SequenceRunStateChange
+from sequence_run_manager_proc.services.sequence_state_srv import get_srsc_hash
 from v2_samplesheet_parser.functions.parser import parse_samplesheet
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+def get_srsc_hash_for(srsc_event: dict) -> str:
+    """Recompute an SRSC event id from its detail, mirroring the emitter."""
+    return get_srsc_hash(SequenceRunStateChange.model_validate(srsc_event))
 
 
 def _make_bearer_token(email: str) -> str:
@@ -48,6 +55,7 @@ def _make_bearer_token(email: str) -> str:
 class SequenceViewSetTestCase(TestCase):
     sequence_run_endpoint = f"/{api_base}sequence_run"
     state_transition_endpoint = f"/{api_base}sequence_run/state"
+    state_actor_email = "State.Actor@example.org"
     sequence_endpoint = f"/{api_base}sequence"
     sample_sheet_endpoint = f"/{api_base}sample_sheet"
     stats_sequence_run_status_counts_endpoint = (
@@ -112,7 +120,16 @@ class SequenceViewSetTestCase(TestCase):
             status="active",
         )
 
+    def authenticate_state_actor(self, email=None) -> str:
+        """Present a Bearer JWT on the client and return the email it records."""
+        email = email or self.state_actor_email
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token(email)}"
+        )
+        return email.strip().lower()
+
     def tearDown(self):
+        self.client.credentials()
         Sequence.objects.all().delete()
         SampleSheet.objects.all().delete()
         Comment.objects.all().delete()
@@ -485,6 +502,7 @@ class SequenceViewSetTestCase(TestCase):
         )
 
     def test_state_transition_mixin_validation_rules(self):
+        actor = self.authenticate_state_actor()
         mixin = StateTransitionMixin()
 
         self.assertTrue(mixin.is_valid_next_state(None, "DEPRECATED"))
@@ -506,11 +524,20 @@ class SequenceViewSetTestCase(TestCase):
         self.assertFalse(mixin.is_valid_next_state("SUCCEEDED", "RESOLVED"))
         self.assertFalse(mixin.is_valid_next_state("FAILED", "IGNORED"))
 
-    def test_patch_state_comment(self):
-        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        state = (
-            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+    def custom_state(self, sequence_run, created_by=None, status="RESOLVED"):
+        """A user-created state, the only kind whose comment can be edited."""
+        return State.objects.create(
+            sequence=sequence_run,
+            status=status,
+            timestamp=now(),
+            comment="Original note",
+            created_by=created_by,
         )
+
+    def test_patch_state_comment(self):
+        actor = self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = self.custom_state(sequence_run, created_by=actor)
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
             {"comment": "Resolution note"},
@@ -518,15 +545,15 @@ class SequenceViewSetTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["comment"], "Resolution note")
+        self.assertEqual(response.data["created_by"], actor)
         state.refresh_from_db()
         self.assertEqual(state.comment, "Resolution note")
 
     @patch("sequence_run_manager.viewsets.state.StateViewSet.get_object")
     def test_patch_state_comment_clears_prefetch_cache(self, mock_get_object):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        state = (
-            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
-        )
+        state = self.custom_state(sequence_run, created_by=actor)
         original_save = state.save
 
         def save_with_prefetch_cache(*args, **kwargs):
@@ -547,10 +574,9 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(state._prefetched_objects_cache, {})
 
     def test_patch_state_requires_comment(self):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
-        state = (
-            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
-        )
+        state = self.custom_state(sequence_run, created_by=actor)
         response = self.client.patch(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
             {},
@@ -559,7 +585,89 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("comment", response.data.get("detail", "").lower())
 
+    def test_patch_state_requires_bearer_token(self):
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = self.custom_state(sequence_run, created_by="someone@example.org")
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Resolution note"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+        state.refresh_from_db()
+        self.assertEqual(state.comment, "Original note")
+
+    def test_patch_state_rejects_system_generated_state(self):
+        """Only RESOLVED/DEPRECATED states carry an editable comment."""
+        self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        system_state = (
+            State.objects.filter(sequence=sequence_run).order_by("-timestamp").first()
+        )
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{system_state.orcabus_id}/",
+            {"comment": "Resolution note"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["detail"], "Invalid state status to update comment."
+        )
+
+    def test_patch_state_rejects_non_creator(self):
+        self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = self.custom_state(sequence_run, created_by="someone.else@example.org")
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Not mine to edit"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        state.refresh_from_db()
+        self.assertEqual(state.comment, "Original note")
+
+    def test_patch_state_creator_match_is_case_insensitive(self):
+        self.authenticate_state_actor("STATE.ACTOR@EXAMPLE.ORG")
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = self.custom_state(sequence_run, created_by="state.actor@example.org")
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Resolution note"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_patch_state_without_creator_is_editable_by_any_authenticated_user(self):
+        """Legacy states predate creator auditing; no ownership is inferred."""
+        self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        legacy_state = self.custom_state(sequence_run, created_by=None)
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{legacy_state.orcabus_id}/",
+            {"comment": "Adopted note"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        legacy_state.refresh_from_db()
+        self.assertEqual(legacy_state.comment, "Adopted note")
+        self.assertIsNone(legacy_state.created_by)
+
+    def test_patch_state_ignores_client_supplied_created_by(self):
+        actor = self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        state = self.custom_state(sequence_run, created_by=actor)
+        response = self.client.patch(
+            f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/{state.orcabus_id}/",
+            {"comment": "Resolution note", "createdBy": "impostor@example.org"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        state.refresh_from_db()
+        self.assertEqual(state.created_by, actor)
+
     def test_state_transition_requires_ids_and_comment(self):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         missing_comment = self.client.post(
             f"{self.state_transition_endpoint}/resolve/",
@@ -577,8 +685,57 @@ class SequenceViewSetTestCase(TestCase):
         self.assertEqual(missing_ids.status_code, 400)
         self.assertIn("sequence_run_orcabus_ids", missing_ids.data)
 
+    def test_state_transition_requires_bearer_token(self):
+        """Authorship comes from the JWT, so an unauthenticated batch is rejected."""
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+
+        response = self.client.post(
+            f"{self.state_transition_endpoint}/resolve/",
+            {
+                "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                "comment": "Handled",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(
+            State.objects.filter(sequence=sequence_run, status="RESOLVED").exists()
+        )
+        sequence_run.refresh_from_db()
+        self.assertEqual(sequence_run.status, "FAILED")
+
+    @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
+    def test_state_transition_ignores_client_supplied_created_by(
+        self, mock_emit_srsc_event
+    ):
+        actor = self.authenticate_state_actor()
+        sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
+        sequence_run.status = SequenceStatus.FAILED
+        sequence_run.save(update_fields=["status"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                f"{self.state_transition_endpoint}/resolve/",
+                {
+                    "sequenceRunOrcabusIds": [sequence_run.orcabus_id],
+                    "comment": "Handled",
+                    "createdBy": "impostor@example.org",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201)
+        state = State.objects.get(sequence=sequence_run, status="RESOLVED")
+        self.assertEqual(state.created_by, actor)
+        srsc_event = mock_emit_srsc_event.call_args.args[0]
+        self.assertEqual(srsc_event["stateCreatedBy"], actor)
+
     def test_state_transition_post_to_state_list_is_not_allowed(self):
         """The generic POST /state/ endpoint is replaced by the dedicated transitions."""
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         response = self.client.post(
             f"{self.sequence_run_endpoint}/{sequence_run.orcabus_id}/state/",
@@ -589,6 +746,7 @@ class SequenceViewSetTestCase(TestCase):
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_state_transition_sequence_run_not_found(self, mock_emit_srsc_event):
+        actor = self.authenticate_state_actor()
         response = self.client.post(
             f"{self.state_transition_endpoint}/resolve/",
             {
@@ -605,6 +763,7 @@ class SequenceViewSetTestCase(TestCase):
 
     def test_state_transition_invalid_transition(self):
         """Sequence status wins even when the latest state allows the transition."""
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -631,6 +790,7 @@ class SequenceViewSetTestCase(TestCase):
     def test_state_transition_revalidates_locked_sequence_status(
         self, mock_emit_srsc_event
     ):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -673,6 +833,7 @@ class SequenceViewSetTestCase(TestCase):
     def test_state_transition_database_failure_returns_error_and_rolls_back_state(
         self, mock_create_state_and_build_srsc
     ):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -710,6 +871,7 @@ class SequenceViewSetTestCase(TestCase):
         self, mock_create_state_and_build_srsc
     ):
         """A non-DatabaseError raised before commit is reported, not propagated."""
+        self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -750,6 +912,7 @@ class SequenceViewSetTestCase(TestCase):
         self, mock_emit_srsc_event
     ):
         """Ids are accepted both with and without the ``seq.`` prefix."""
+        self.authenticate_state_actor()
         self.assertEqual(
             StateTransitionMixin.normalize_sequence_run_orcabus_id(
                 "01J5M2J44HFJ9424G7074NKTGN"
@@ -784,6 +947,7 @@ class SequenceViewSetTestCase(TestCase):
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_state_transition_resolve_after_failed(self, mock_emit_srsc_event):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -818,7 +982,13 @@ class SequenceViewSetTestCase(TestCase):
         )
         mock_emit_srsc_event.assert_called_once()
         srsc_event = mock_emit_srsc_event.call_args.args[0]
-        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["version"], "1.1.0")
+        self.assertEqual(srsc_event["orcabusId"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["stateCreatedBy"], actor)
+        self.assertEqual(state.created_by, actor)
+        # `id` is a content hash of the event, no longer the sequence id.
+        self.assertNotEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["id"], get_srsc_hash_for(srsc_event))
         self.assertEqual(srsc_event["instrumentRunId"], sequence_run.instrument_run_id)
         self.assertEqual(srsc_event["runVolumeName"], sequence_run.run_volume_name)
         self.assertEqual(srsc_event["runFolderPath"], sequence_run.run_folder_path)
@@ -828,6 +998,7 @@ class SequenceViewSetTestCase(TestCase):
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_state_transition_deprecate_after_succeeded(self, mock_emit_srsc_event):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         State.objects.create(
             sequence=sequence_run,
@@ -857,11 +1028,13 @@ class SequenceViewSetTestCase(TestCase):
         )
         mock_emit_srsc_event.assert_called_once()
         srsc_event = mock_emit_srsc_event.call_args.args[0]
-        self.assertEqual(srsc_event["id"], sequence_run.orcabus_id)
+        self.assertEqual(srsc_event["orcabusId"], sequence_run.orcabus_id)
         self.assertEqual(srsc_event["status"], "DEPRECATED")
+        self.assertEqual(srsc_event["stateCreatedBy"], actor)
 
     @patch("sequence_run_manager.viewsets.state.emit_srsc_api_event")
     def test_state_transition_partial_success_returns_207(self, mock_emit_srsc_event):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -892,6 +1065,7 @@ class SequenceViewSetTestCase(TestCase):
     def test_state_transition_publish_failure_is_logged_after_commit(
         self, mock_emit_srsc_event
     ):
+        actor = self.authenticate_state_actor()
         mock_emit_srsc_event.side_effect = RuntimeError("event bus unavailable")
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
@@ -930,6 +1104,7 @@ class SequenceViewSetTestCase(TestCase):
     def test_state_transition_defers_srsc_publication_until_commit(
         self, mock_emit_srsc_event
     ):
+        actor = self.authenticate_state_actor()
         sequence_run = Sequence.objects.get(sequence_run_id="r.AAAAAA")
         sequence_run.status = SequenceStatus.FAILED
         sequence_run.save(update_fields=["status"])
@@ -954,6 +1129,7 @@ class SequenceViewSetTestCase(TestCase):
     def test_state_transition_only_deprecate_when_no_current_sequence_status(
         self, mock_emit_srsc_event
     ):
+        actor = self.authenticate_state_actor()
         orphan = Sequence.objects.create(
             instrument_run_id="orphan_run_001",
             run_volume_name="vol",
@@ -991,8 +1167,9 @@ class SequenceViewSetTestCase(TestCase):
         )
         mock_emit_srsc_event.assert_called_once()
         srsc_event = mock_emit_srsc_event.call_args.args[0]
-        self.assertEqual(srsc_event["id"], orphan.orcabus_id)
+        self.assertEqual(srsc_event["orcabusId"], orphan.orcabus_id)
         self.assertEqual(srsc_event["status"], "DEPRECATED")
+        self.assertEqual(srsc_event["stateCreatedBy"], actor)
 
     @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srllc_api_event")
     @patch("sequence_run_manager.viewsets.sequence_run_action.emit_srssc_api_event")
@@ -1184,6 +1361,9 @@ class StateTransitionConcurrencyTestCase(TransactionTestCase):
             close_old_connections()
             try:
                 client = APIClient()
+                client.credentials(
+                    HTTP_AUTHORIZATION=f"Bearer {_make_bearer_token('state.actor@example.org')}"
+                )
                 response = client.post(
                     f"{self.state_transition_endpoint}/resolve/",
                     {
