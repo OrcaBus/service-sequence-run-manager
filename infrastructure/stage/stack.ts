@@ -305,11 +305,11 @@ export class SequenceRunManagerStack extends GitStack {
   private setupProcSampleSheetEventRule(fn: IFunction) {
     const procSampleSheetEventRule = new Rule(this, this.stackName + 'ProcSampleSheetEventRule', {
       ruleName: this.stackName + 'ProcSampleSheetEventRule',
-      description: 'Rule for procurement of SampleSheet from SRSSC event',
+      description: 'Rule for procurement of SampleSheet from SRSSU event',
       eventBus: this.mainBus,
     });
     procSampleSheetEventRule.addEventPattern({
-      detailType: ['SequenceRunSampleSheetChange'],
+      detailType: ['SequenceRunSampleSheetUpdate'],
       // @ts-expect-error anything-but is not supported in the type definition
       source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
       detail: {
@@ -371,11 +371,11 @@ export class SequenceRunManagerStack extends GitStack {
   private setupProcLibraryLinkingEventRule(fn: IFunction) {
     const eventRule = new Rule(this, this.stackName + 'ProcLibraryLinkingEventRule', {
       ruleName: this.stackName + 'ProcLibraryLinkingEventRule',
-      description: 'Rule to send LibraryLinking events to the ProcLibraryLinkingHandler Lambda',
+      description: 'Rule to send SRLLU events to the ProcLibraryLinkingHandler Lambda',
       eventBus: this.mainBus,
     });
     eventRule.addEventPattern({
-      detailType: ['SequenceRunLibraryLinkingChange'],
+      detailType: ['SequenceRunLibraryLinkingUpdate'],
       // @ts-expect-error anything-but is not supported in the type definition
       source: [{ 'anything-but': 'orcabus.sequencerunmanager' }],
       detail: {

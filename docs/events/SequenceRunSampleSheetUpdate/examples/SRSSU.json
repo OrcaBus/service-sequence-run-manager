@@ -1,0 +1,23 @@
+{
+  "version": "0",
+  "id": "12345678-90ab-cdef-1234-567890abcdef",
+  "detail-type": "SequenceRunSampleSheetUpdate",
+  "source": "anything except orcabus.sequencerunmanager e.g. orcabus.manual",
+  "account": "000000000000",
+  "time": "2025-03-01T00:00:00Z",
+  "region": "ap-southeast-2",
+  "resources": [],
+  "detail": {
+    "id": "6b039445b1582ae61dad7b32a0550f20",
+    "version": "1.0.0",
+    "instrumentRunId": "123456_A7890_1234_ABCDEFGH",
+    "sequenceRunId": "r.1234567890abcdefghijklmn",
+    "timeStamp": "2025-03-01T00:00:00.000000Z",
+    "sampleSheetName": "sampleSheet_v2.csv",
+    "samplesheetBase64gz": "base64_encoded_gzipped_samplesheet_csv",
+    "comment": {
+      "comment": "Corrected the index of library L2000001",
+      "createdBy": "jane.doe@example.org"
+    }
+  }
+}

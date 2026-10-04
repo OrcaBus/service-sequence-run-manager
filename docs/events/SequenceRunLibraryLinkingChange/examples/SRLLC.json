@@ -8,6 +8,8 @@
   "region": "ap-southeast-2",
   "resources": [],
   "detail": {
+    "id": "ad0abebb56dfdaad68886e71cca84a3c",
+    "version": "1.1.0",
     "instrumentRunId": "123456_A7890_1234_ABCDEFGH",
     "sequenceRunId": "r.1234567890abcdefghijklmn",
     "timeStamp": "2025-03-01T00:00:00.123456Z",

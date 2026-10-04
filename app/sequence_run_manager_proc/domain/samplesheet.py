@@ -15,6 +15,45 @@ from sequence_run_manager.settings.base import API_VERSION
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Semver of the SRSSC event contract, emitted as `detail.version`.
+#   1.1.0 -- added `version` and the content hash `id`.
+SRSSC_SCHEMA_VERSION = "1.1.0"
+
+
+def get_srssc_hash(srssc: SequenceRunSampleSheetChange) -> str:
+    """Content hash identifying an SRSSC data event, for deduplication.
+
+    Derived from the fields that identify the announced sample sheet: the schema
+    version, the sequence run, the sample sheet record (`apiUrl` carries its
+    OrcaBus id), its name and its content checksum. `timeStamp` and the
+    free-text `description` are deliberately left out so that re-announcing the
+    same sample sheet yields the same id.
+
+    An id that is already set is returned untouched, so calling this twice on
+    the same event is a no-op.
+    """
+    if srssc.id:
+        return srssc.id
+
+    # Canonical JSON for the same reasons as `get_srsc_hash`: field names keep
+    # the boundaries between values intact and sorted keys pin the digest.
+    content = json.dumps(
+        {
+            "version": srssc.version,
+            "instrumentRunId": srssc.instrumentRunId,
+            "sequenceRunId": srssc.sequenceRunId,
+            "sampleSheetName": srssc.sampleSheetName,
+            "apiUrl": srssc.apiUrl,
+            "checksum": srssc.checksum,
+            "checksumType": srssc.checksumType,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    # Not a security digest -- md5 is used only as a short, stable dedup key.
+    return hashlib.md5(content.encode("utf-8"), usedforsecurity=False).hexdigest()
+
 
 @dataclass
 class SampleSheetDomain:
@@ -85,7 +124,9 @@ class SampleSheetDomain:
         checksum = self._generate_sample_sheet_checksum(
             self.sample_sheet.sample_sheet_content_original
         )
-        return SequenceRunSampleSheetChange(
+        srssc = SequenceRunSampleSheetChange(
+            id="",
+            version=SRSSC_SCHEMA_VERSION,
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
             timeStamp=self.sample_sheet.association_timestamp,
@@ -95,6 +136,8 @@ class SampleSheetDomain:
             checksumType="sha256",
             description=self.description,
         )
+        srssc.id = get_srssc_hash(srssc)
+        return srssc
 
     def to_event_with_envelope(self) -> AWSEvent:
         return AWSEvent(
