@@ -1,19 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "$id": "https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunLibraryLinkingChange.schema.json",
-  "description": "EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunLibraryLinkingChange",
+  "$id": "https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunLibraryLinkingUpdate.schema.json",
+  "description": "EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunLibraryLinkingUpdate",
   "title": "AWSEvent",
   "definitions": {
-    "SequenceRunLibraryLinkingChange": {
+    "SequenceRunLibraryLinkingUpdate": {
       "type": "object",
-      "required": [
-        "id",
-        "version",
-        "instrumentRunId",
-        "sequenceRunId",
-        "timeStamp",
-        "linkedLibraries"
-      ],
+      "required": ["instrumentRunId", "sequenceRunId", "timeStamp", "linkedLibraries"],
       "properties": {
         "id": {
           "type": "string"
@@ -71,7 +64,7 @@
       "type": "string"
     },
     "detail": {
-      "$ref": "#/definitions/SequenceRunLibraryLinkingChange"
+      "$ref": "#/definitions/SequenceRunLibraryLinkingUpdate"
     }
   },
   "required": ["detail", "detail-type", "source"]

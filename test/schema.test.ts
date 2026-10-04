@@ -24,6 +24,14 @@ test('Test orcabus.sequencerunmanager SequenceRunManagerSchemaRegistry Creation'
   });
 
   template.hasResourceProperties('AWS::EventSchemas::Schema', {
+    SchemaName: 'orcabus.sequencerunmanager@SequenceRunSampleSheetUpdate',
+  });
+
+  template.hasResourceProperties('AWS::EventSchemas::Schema', {
     SchemaName: 'orcabus.sequencerunmanager@SequenceRunLibraryLinkingChange',
+  });
+
+  template.hasResourceProperties('AWS::EventSchemas::Schema', {
+    SchemaName: 'orcabus.sequencerunmanager@SequenceRunLibraryLinkingUpdate',
   });
 });

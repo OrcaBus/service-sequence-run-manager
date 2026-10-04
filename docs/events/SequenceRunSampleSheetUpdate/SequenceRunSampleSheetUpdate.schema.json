@@ -1,19 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "$id": "https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunLibraryLinkingChange.schema.json",
-  "description": "EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunLibraryLinkingChange",
+  "$id": "https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunSampleSheetUpdate.schema.json",
+  "description": "EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunSampleSheetUpdate",
   "title": "AWSEvent",
   "definitions": {
-    "SequenceRunLibraryLinkingChange": {
+    "SequenceRunSampleSheetUpdate": {
       "type": "object",
-      "required": [
-        "id",
-        "version",
-        "instrumentRunId",
-        "sequenceRunId",
-        "timeStamp",
-        "linkedLibraries"
-      ],
+      "required": ["instrumentRunId", "timeStamp", "sampleSheetName", "samplesheetBase64gz"],
       "properties": {
         "id": {
           "type": "string"
@@ -31,11 +24,26 @@
           "type": "string",
           "format": "date-time"
         },
-        "linkedLibraries": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "sampleSheetName": {
+          "type": "string"
+        },
+        "samplesheetBase64gz": {
+          "type": "string"
+        },
+        "comment": {
+          "$ref": "#/definitions/Comment"
+        }
+      }
+    },
+    "Comment": {
+      "type": "object",
+      "required": ["comment", "createdBy"],
+      "properties": {
+        "comment": {
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
         }
       }
     }
@@ -71,7 +79,7 @@
       "type": "string"
     },
     "detail": {
-      "$ref": "#/definitions/SequenceRunLibraryLinkingChange"
+      "$ref": "#/definitions/SequenceRunSampleSheetUpdate"
     }
   },
   "required": ["detail", "detail-type", "source"]

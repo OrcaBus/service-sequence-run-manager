@@ -1,3 +1,5 @@
+import hashlib
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -9,6 +11,41 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Semver of the SRLLC event contract, emitted as `detail.version`.
+#   1.1.0 -- added `version` and the content hash `id`.
+SRLLC_SCHEMA_VERSION = "1.1.0"
+
+
+def get_srllc_hash(srllc: SequenceRunLibraryLinkingChange) -> str:
+    """Content hash identifying an SRLLC data event, for deduplication.
+
+    Derived from the schema version, the sequence run and the linked libraries.
+    The libraries are hashed as a sorted set -- the same way the linking itself
+    is compared -- so their order does not matter. `timeStamp` is deliberately
+    left out so that re-announcing an unchanged linking yields the same id.
+
+    An id that is already set is returned untouched, so calling this twice on
+    the same event is a no-op.
+    """
+    if srllc.id:
+        return srllc.id
+
+    # Canonical JSON for the same reasons as `get_srsc_hash`: field names keep
+    # the boundaries between values intact and sorted keys pin the digest.
+    content = json.dumps(
+        {
+            "version": srllc.version,
+            "instrumentRunId": srllc.instrumentRunId,
+            "sequenceRunId": srllc.sequenceRunId,
+            "linkedLibraries": sorted(set(srllc.linkedLibraries)),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    # Not a security digest -- md5 is used only as a short, stable dedup key.
+    return hashlib.md5(content.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 @dataclass
@@ -31,12 +68,16 @@ class LibraryLinkingDomain:
         return SequenceRunLibraryLinkingChange.__name__
 
     def to_event(self) -> SequenceRunLibraryLinkingChange:
-        return SequenceRunLibraryLinkingChange(
+        srllc = SequenceRunLibraryLinkingChange(
+            id="",
+            version=SRLLC_SCHEMA_VERSION,
             instrumentRunId=self.instrument_run_id,
             sequenceRunId=self.sequence_run_id,
             timeStamp=self.timestamp,
             linkedLibraries=self.linked_libraries,
         )
+        srllc.id = get_srllc_hash(srllc)
+        return srllc
 
     def to_event_with_envelope(self) -> AWSEvent:
         return AWSEvent(

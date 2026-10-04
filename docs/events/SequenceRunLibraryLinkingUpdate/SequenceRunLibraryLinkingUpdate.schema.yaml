@@ -1,0 +1,70 @@
+'$schema': 'http://json-schema.org/draft-04/schema#'
+'$id': 'https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunLibraryLinkingUpdate.schema.json'
+description: EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunLibraryLinkingUpdate
+title: AWSEvent
+type: object
+required:
+  - detail-type # defines the event type: SequenceRunLibraryLinkingUpdate
+  - detail # actual event data
+  - source # defines the event emitter: anything but orcabus.sequencerunmanager
+properties:
+  id:
+    type: string
+  region:
+    type: string
+  resources:
+    type: array
+    items:
+      type: string
+  source:
+    type: string
+  time:
+    type: string
+    format: date-time
+  version:
+    type: string
+  account:
+    type: string
+  detail-type:
+    type: string
+  detail:
+    '$ref': '#/definitions/SequenceRunLibraryLinkingUpdate'
+definitions:
+  SequenceRunLibraryLinkingUpdate:
+    # Sent by other services to (re)link libraries to a sequence run. The Sequence Run
+    # Manager applies it and, when the linking changed, announces the result as a
+    # SequenceRunLibraryLinkingChange event.
+    type: object
+    required:
+      # `id` and `version` are recommended but not enforced, so a producer only has to
+      # supply the linking itself (same convention as WorkflowRunUpdate).
+      #      - id
+      #      - version
+      - instrumentRunId
+      - sequenceRunId
+      - timeStamp
+      - linkedLibraries
+    properties:
+      id:
+        # unique id for the data event, e.g. the hashed event data, useful for deduplication.
+        # (This is supposed to only change if the event payload has changed)
+        # NOTE: independent of the AWS event id and in the control of the service emitting the event
+        type: string
+      version:
+        # the version associated with the event schema version (following semver)
+        type: string
+      instrumentRunId:
+        type: string
+      sequenceRunId:
+        # the sequence run to link the libraries to; it must already be known to the Sequence Run Manager
+        type: string
+      timeStamp:
+        # time of the linking update (not necessarily the event time, which is already covered in the AWS wrapper)
+        type: string
+        format: date-time
+      linkedLibraries:
+        # the complete set of libraries for the sequence run, replacing any existing linking
+        # NOTE: an empty list leaves the existing linking untouched
+        type: array
+        items:
+          type: string

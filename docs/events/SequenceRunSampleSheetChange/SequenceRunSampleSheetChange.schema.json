@@ -7,6 +7,8 @@
     "SequenceRunSampleSheetChange": {
       "type": "object",
       "required": [
+        "id",
+        "version",
         "instrumentRunId",
         "sequenceRunId",
         "timeStamp",
@@ -16,6 +18,12 @@
         "checksumType"
       ],
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
         "instrumentRunId": {
           "type": "string"
         },

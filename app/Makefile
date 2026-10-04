@@ -265,10 +265,10 @@ openapi:
 validate: openapi
 	@python -m openapi_spec_validator orcabus.sequencerunmanager.openapi.yaml
 
-schema-gen: schema-gen-srsc schema-gen-srssc schema-gen-srllc
+schema-gen: schema-gen-srsc schema-gen-srssc schema-gen-srssu schema-gen-srllc schema-gen-srllu
 
-# Flags: --output-datetime-class datetime keeps plain `datetime` (pydantic's default
-# AwareDatetime would reject timestamps carrying no timezone);
+# Flags (shared by every event model below): --output-datetime-class datetime keeps plain
+# `datetime` (pydantic's default AwareDatetime would reject timestamps carrying no timezone);
 # --allow-population-by-field-name emits populate_by_name=True so AWSEvent can be built
 # as AWSEvent(detail_type=...) rather than only by its `detail-type` alias.
 schema-gen-srsc:
@@ -277,11 +277,19 @@ schema-gen-srsc:
 
 schema-gen-srssc:
 	@echo "Generating SRSSC schema..."
-	@datamodel-codegen --input ../docs/events/SequenceRunSampleSheetChange/SequenceRunSampleSheetChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srssc.py
+	@datamodel-codegen --input ../docs/events/SequenceRunSampleSheetChange/SequenceRunSampleSheetChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srssc.py --output-datetime-class datetime --allow-population-by-field-name
+
+schema-gen-srssu:
+	@echo "Generating SRSSU schema..."
+	@datamodel-codegen --input ../docs/events/SequenceRunSampleSheetUpdate/SequenceRunSampleSheetUpdate.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srssu.py --output-datetime-class datetime --allow-population-by-field-name
 
 schema-gen-srllc:
 	@echo "Generating SRLLC schema..."
-	@datamodel-codegen --input ../docs/events/SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srllc.py
+	@datamodel-codegen --input ../docs/events/SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srllc.py --output-datetime-class datetime --allow-population-by-field-name
+
+schema-gen-srllu:
+	@echo "Generating SRLLU schema..."
+	@datamodel-codegen --input ../docs/events/SequenceRunLibraryLinkingUpdate/SequenceRunLibraryLinkingUpdate.schema.json --input-file-type jsonschema --output sequence_run_manager_proc/domain/events/srllu.py --output-datetime-class datetime --allow-population-by-field-name
 
 
 # Database commands

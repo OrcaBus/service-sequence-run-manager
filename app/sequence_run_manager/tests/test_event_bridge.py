@@ -150,6 +150,8 @@ class SrsscApiEventTestCase(SimpleTestCase):
         self.assertEqual(entry["DetailType"], "SequenceRunSampleSheetChange")
         self.assertEqual(entry["EventBusName"], "test-event-bus")
         detail = json.loads(entry["Detail"])
+        self.assertEqual(detail["version"], "1.1.0")
+        self.assertRegex(detail["id"], r"^[0-9a-f]{32}$")
         self.assertEqual(detail["instrumentRunId"], "250328_A01052_0258_AHFGM7DSXF")
         self.assertEqual(detail["sampleSheetName"], "SampleSheet.csv")
 
@@ -226,6 +228,8 @@ class SrllcApiEventTestCase(SimpleTestCase):
         self.assertEqual(entry["DetailType"], "SequenceRunLibraryLinkingChange")
         self.assertEqual(entry["EventBusName"], "test-event-bus")
         detail = json.loads(entry["Detail"])
+        self.assertEqual(detail["version"], "1.1.0")
+        self.assertRegex(detail["id"], r"^[0-9a-f]{32}$")
         self.assertEqual(detail["instrumentRunId"], "250328_A01052_0258_AHFGM7DSXF")
         self.assertEqual(detail["linkedLibraries"], ["L2000001", "L2000002"])
 
