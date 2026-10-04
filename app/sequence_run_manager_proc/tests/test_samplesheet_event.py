@@ -1,3 +1,7 @@
+import base64
+import gzip
+from unittest.mock import patch
+
 from django.utils import timezone
 
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
@@ -214,4 +218,60 @@ class SampleSheetEventUnitTests(SequenceRunProcUnitTestCase):
 
         self.assertFalse(SampleSheet.objects.exists())
         self.assertEqual([], self.emitted_events(SRSSC))
+        self.assertEqual([], self.emitted_events(SRLLC))
+
+    def test_event_handler_without_comment(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_samplesheet_event.SampleSheetEventUnitTests.test_event_handler_without_comment
+        """
+        mock_event_message = (
+            SequenceRunManagerProcFactory.mock_sample_sheet_update_event_message()
+        )
+        del mock_event_message["detail"]["comment"]
+
+        _ = samplesheet_event.event_handler(mock_event_message, None)
+
+        self.assertEqual(1, SampleSheet.objects.count())
+        self.assertFalse(Comment.objects.exists())
+        srssc_events = self.emitted_events(SRSSC)
+        self.assertEqual(1, len(srssc_events))
+        self.assertNotIn("Comment:", srssc_events[0]["description"])
+
+    def test_event_handler_without_libraries(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_samplesheet_event.SampleSheetEventUnitTests.test_event_handler_without_libraries
+        """
+        sample_sheet_csv = "[Header]\nfileFormatVersion,2\n\n[Reads]\nread1Cycles,151\n"
+        mock_event_message = (
+            SequenceRunManagerProcFactory.mock_sample_sheet_update_event_message()
+        )
+        mock_event_message["detail"]["samplesheetBase64gz"] = base64.b64encode(
+            gzip.compress(sample_sheet_csv.encode("utf-8"))
+        ).decode("utf-8")
+
+        _ = samplesheet_event.event_handler(mock_event_message, None)
+
+        # the sample sheet is announced, there is no linking to announce
+        self.assertEqual(1, SampleSheet.objects.count())
+        self.assertFalse(LibraryAssociation.objects.exists())
+        self.assertEqual(1, len(self.emitted_events(SRSSC)))
+        self.assertEqual([], self.emitted_events(SRLLC))
+
+    def test_event_handler_when_linking_update_fails(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_samplesheet_event.SampleSheetEventUnitTests.test_event_handler_when_linking_update_fails
+        """
+        mock_event_message = (
+            SequenceRunManagerProcFactory.mock_sample_sheet_update_event_message()
+        )
+
+        with patch(
+            "sequence_run_manager_proc.services.sample_sheet_srv.update_sequence_run_libraries_linking",
+            side_effect=RuntimeError("database unavailable"),
+        ):
+            _ = samplesheet_event.event_handler(mock_event_message, None)
+
+        # the stored sample sheet is still announced, the failed linking is not
+        self.assertEqual(1, SampleSheet.objects.count())
+        self.assertEqual(1, len(self.emitted_events(SRSSC)))
         self.assertEqual([], self.emitted_events(SRLLC))

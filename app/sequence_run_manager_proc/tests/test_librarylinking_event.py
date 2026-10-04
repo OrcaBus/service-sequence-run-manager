@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
-from sequence_run_manager.tests.factories import TestConstant
+from sequence_run_manager.tests.factories import TestConstant, SequenceFactory
 from sequence_run_manager_proc.domain.librarylinking import SRLLC_SCHEMA_VERSION
 from sequence_run_manager_proc.tests.factories import SequenceRunManagerProcFactory
 from sequence_run_manager_proc.lambdas import librarylinking_event, samplesheet_event
@@ -123,4 +125,65 @@ class LibraryLinkingEventUnitTests(SequenceRunProcUnitTestCase):
         )
 
         self.assertIn("Invalid event detail type", result["message"])
+        self.assertEqual([], self.emitted_events(SRLLC))
+
+    def test_event_handler_with_empty_linking(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_librarylinking_event.LibraryLinkingEventUnitTests.test_event_handler_with_empty_linking
+        """
+        seq = SequenceFactory()
+        mock_library_linking_event_message = (
+            SequenceRunManagerProcFactory.mock_library_linking_update_event_message(
+                seq.sequence_run_id
+            )
+        )
+        mock_library_linking_event_message["detail"]["linkedLibraries"] = []
+
+        _ = librarylinking_event.event_handler(mock_library_linking_event_message, None)
+
+        # an empty list leaves the linking untouched, so nothing is announced
+        self.assertFalse(LibraryAssociation.objects.exists())
+        self.assertEqual([], self.emitted_events(SRLLC))
+
+    def test_event_handler_when_association_creation_fails(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_librarylinking_event.LibraryLinkingEventUnitTests.test_event_handler_when_association_creation_fails
+        """
+        seq = SequenceFactory()
+        mock_library_linking_event_message = (
+            SequenceRunManagerProcFactory.mock_library_linking_update_event_message(
+                seq.sequence_run_id
+            )
+        )
+
+        with patch(
+            "sequence_run_manager_proc.services.sequence_library_srv.create_sequence_run_libraries_linking",
+            side_effect=RuntimeError("database unavailable"),
+        ):
+            _ = librarylinking_event.event_handler(
+                mock_library_linking_event_message, None
+            )
+
+        self.assertFalse(LibraryAssociation.objects.exists())
+        self.assertEqual([], self.emitted_events(SRLLC))
+
+    def test_event_handler_when_linking_update_fails(self):
+        """
+        python manage.py test sequence_run_manager_proc.tests.test_librarylinking_event.LibraryLinkingEventUnitTests.test_event_handler_when_linking_update_fails
+        """
+        seq = SequenceFactory()
+        mock_library_linking_event_message = (
+            SequenceRunManagerProcFactory.mock_library_linking_update_event_message(
+                seq.sequence_run_id
+            )
+        )
+
+        with patch(
+            "sequence_run_manager_proc.services.sequence_library_srv.update_sequence_run_libraries_linking",
+            side_effect=RuntimeError("database unavailable"),
+        ):
+            _ = librarylinking_event.event_handler(
+                mock_library_linking_event_message, None
+            )
+
         self.assertEqual([], self.emitted_events(SRLLC))
