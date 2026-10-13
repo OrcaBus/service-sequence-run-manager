@@ -1,0 +1,16 @@
+{
+  "version": "0",
+  "id": "12345678-90ab-cdef-1234-567890abcdef",
+  "detail-type": "SequenceRunSampleSheetUpdate",
+  "source": "anything except orcabus.sequencerunmanager e.g. orcabus.manual",
+  "account": "000000000000",
+  "time": "2025-03-01T00:00:00Z",
+  "region": "ap-southeast-2",
+  "resources": [],
+  "detail": {
+    "instrumentRunId": "123456_A7890_1234_ABCDEFGH",
+    "timeStamp": "2025-03-01T00:00:00.000000Z",
+    "sampleSheetName": "sampleSheet_v2.csv",
+    "samplesheetBase64gz": "base64_encoded_gzipped_samplesheet_csv"
+  }
+}

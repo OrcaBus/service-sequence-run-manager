@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from django.test import TestCase
@@ -31,6 +32,7 @@ class SequenceRunProcUnitTestCase(TestCase):
         }
         when(aws).eb_client(...).thenReturn(mock_eb)
         when(libeb).eb_client(...).thenReturn(mock_eb)
+        self.mock_eb = mock_eb
 
         # Mock Secrets Manager client
         mock_sm = MagicMock()
@@ -98,6 +100,15 @@ class SequenceRunProcUnitTestCase(TestCase):
             del os.environ["SEQUENCE_RUN_MANAGER_BASE_API_URL"]
 
         unstub()
+
+    def emitted_events(self, detail_type: str) -> list[dict]:
+        """Details of the events of `detail_type` sent to the mocked EventBridge."""
+        return [
+            json.loads(entry["Detail"])
+            for put_events_call in self.mock_eb.put_events.call_args_list
+            for entry in put_events_call.kwargs["Entries"]
+            if entry["DetailType"] == detail_type
+        ]
 
     def verify_local(self):
         queue_urls = libsqs.sqs_client().list_queues()["QueueUrls"]

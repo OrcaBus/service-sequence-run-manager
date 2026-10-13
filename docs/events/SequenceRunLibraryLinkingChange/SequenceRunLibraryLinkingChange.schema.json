@@ -6,8 +6,21 @@
   "definitions": {
     "SequenceRunLibraryLinkingChange": {
       "type": "object",
-      "required": ["instrumentRunId", "sequenceRunId", "timeStamp", "linkedLibraries"],
+      "required": [
+        "id",
+        "version",
+        "instrumentRunId",
+        "sequenceRunId",
+        "timeStamp",
+        "linkedLibraries"
+      ],
       "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
         "instrumentRunId": {
           "type": "string"
         },

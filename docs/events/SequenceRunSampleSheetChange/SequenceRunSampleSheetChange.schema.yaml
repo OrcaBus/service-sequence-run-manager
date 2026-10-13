@@ -33,6 +33,8 @@ definitions:
   SequenceRunSampleSheetChange:
     type: object
     required:
+      - id
+      - version
       - instrumentRunId
       - sequenceRunId
       - timeStamp
@@ -41,6 +43,14 @@ definitions:
       - checksum
       - checksumType
     properties:
+      id:
+        # unique id for the data event, e.g. the hashed event data, useful for deduplication.
+        # (This is supposed to only change if the event payload has changed)
+        # NOTE: independent of the AWS event id
+        type: string
+      version:
+        # the version associated with the event schema version (following semver)
+        type: string
       instrumentRunId:
         type: string
       sequenceRunId:

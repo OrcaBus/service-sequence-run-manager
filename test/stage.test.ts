@@ -1,16 +1,49 @@
-import { App, Aspects, Stack } from 'aws-cdk-lib';
-import { Annotations, Match } from 'aws-cdk-lib/assertions';
-import { SynthesisMessage } from 'aws-cdk-lib/cx-api';
-import { AwsSolutionsChecks, NagSuppressions } from 'cdk-nag';
 import { SequenceRunManagerStack } from '../infrastructure/stage/stack';
 import { getSequenceRunManagerStackProps } from '../infrastructure/stage/config';
+import { AcceptedNagRule, newNagTestApp, unacceptedNagFindings } from './utils';
 
-function synthesisMessageToString(sm: SynthesisMessage): string {
-  return `${sm.entry.data} [${sm.id}]`;
-}
+const BACKUP_MIGRATION_STEP_PATH =
+  'SequenceRunManagerStack/AutoTriggerBackupMigration/backupMigrationStep/Resource';
+
+const ACCEPTED_RULES: AcceptedNagRule[] = [
+  { id: 'AwsSolutions-S10', reason: 'not require requests to use SSL' },
+
+  // FIXME one day we should remove this `AwsSolutions-IAM4` suppression and tackle any use of AWS managed policies
+  //  in all our stacks. See https://github.com/umccr/orcabus/issues/174
+  { id: 'AwsSolutions-IAM4', reason: 'allow to use AWS managed policy' },
+
+  { id: 'AwsSolutions-APIG1', reason: 'See https://github.com/aws/aws-cdk/issues/11100' },
+  { id: 'AwsSolutions-APIG4', reason: 'We have the default Cognito UserPool authorizer' },
+
+  // NOTE
+  // This `AwsSolutions-L1` is tricky. Typically, it is okay to have one version less of the latest runtime
+  // version. Not every dependency (including transitive packages) aren't upto speed with latest runtime.
+  {
+    id: 'AwsSolutions-L1',
+    reason:
+      'Use the latest available runtime for the targeted language to avoid technical debt. ' +
+      'Runtimes specific to a language or framework version are deprecated when the version ' +
+      'reaches end of life. This rule only applies to non-container Lambda functions.',
+  },
+
+  {
+    id: 'AwsSolutions-IAM5',
+    reason:
+      '* is required to access the temporary linking data files by the enrichment lambda function.',
+    path: 'SequenceRunManagerStack/LambdaRole/DefaultPolicy/Resource',
+  },
+  { id: 'AwsSolutions-IAM5', reason: 'Allow wildcard permissions based.' },
+
+  {
+    id: 'AwsSolutions-SF1',
+    reason: 'Disable cloudwatch logs for simple Step Functions.',
+    path: BACKUP_MIGRATION_STEP_PATH,
+  },
+  { id: 'AwsSolutions-SF2', reason: 'Disable X-Ray for now.', path: BACKUP_MIGRATION_STEP_PATH },
+];
 
 describe('cdk-nag-stateless-toolchain-stack', () => {
-  const app = new App({});
+  const app = newNagTestApp();
 
   // You should configure all stack (sateless, stateful) to be tested
   const deployStack = new SequenceRunManagerStack(app, 'SequenceRunManagerStack', {
@@ -23,126 +56,11 @@ describe('cdk-nag-stateless-toolchain-stack', () => {
     },
   });
 
-  Aspects.of(deployStack).add(new AwsSolutionsChecks());
-  applyNagSuppression(deployStack);
-
   test(`cdk-nag AwsSolutions Pack errors`, () => {
-    const errors = Annotations.fromStack(deployStack)
-      .findError('*', Match.stringLikeRegexp('AwsSolutions-.*'))
-      .map(synthesisMessageToString);
-    expect(errors).toHaveLength(0);
+    expect(unacceptedNagFindings(deployStack, ACCEPTED_RULES, 'error')).toHaveLength(0);
   });
 
   test(`cdk-nag AwsSolutions Pack warnings`, () => {
-    const warnings = Annotations.fromStack(deployStack)
-      .findWarning('*', Match.stringLikeRegexp('AwsSolutions-.*'))
-      .map(synthesisMessageToString);
-    expect(warnings).toHaveLength(0);
+    expect(unacceptedNagFindings(deployStack, ACCEPTED_RULES, 'warning')).toHaveLength(0);
   });
 });
-
-/**
- * apply nag suppression
- * @param stack
- */
-function applyNagSuppression(stack: Stack) {
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [{ id: 'AwsSolutions-S10', reason: 'not require requests to use SSL' }],
-    true
-  );
-
-  // FIXME one day we should remove this `AwsSolutions-IAM4` suppression and tackle any use of AWS managed policies
-  //  in all our stacks. See https://github.com/umccr/orcabus/issues/174
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [{ id: 'AwsSolutions-IAM4', reason: 'allow to use AWS managed policy' }],
-    true
-  );
-
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [
-      {
-        id: 'AwsSolutions-APIG1',
-        reason: 'See https://github.com/aws/aws-cdk/issues/11100',
-      },
-    ],
-    true
-  );
-
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [
-      {
-        id: 'AwsSolutions-APIG4',
-        reason: 'We have the default Cognito UserPool authorizer',
-      },
-    ],
-    true
-  );
-
-  // NOTE
-  // This `AwsSolutions-L1` is tricky. Typically, it is okay to have one version less of the latest runtime
-  // version. Not every dependency (including transitive packages) aren't upto speed with latest runtime.
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [
-      {
-        id: 'AwsSolutions-L1',
-        reason:
-          'Use the latest available runtime for the targeted language to avoid technical debt. ' +
-          'Runtimes specific to a language or framework version are deprecated when the version ' +
-          'reaches end of life. This rule only applies to non-container Lambda functions.',
-      },
-    ],
-    true
-  );
-
-  NagSuppressions.addResourceSuppressionsByPath(
-    stack,
-    `/SequenceRunManagerStack/LambdaRole/DefaultPolicy/Resource`,
-    [
-      {
-        id: 'AwsSolutions-IAM5',
-        reason:
-          '* is required to access the temporary linking data files by the enrichment lambda function.',
-      },
-    ],
-    true
-  );
-
-  NagSuppressions.addStackSuppressions(
-    stack,
-    [
-      {
-        id: 'AwsSolutions-IAM5',
-        reason: 'Allow wildcard permissions based.',
-      },
-    ],
-    true
-  );
-
-  NagSuppressions.addResourceSuppressionsByPath(
-    stack,
-    '/SequenceRunManagerStack/AutoTriggerBackupMigration/backupMigrationStep/Resource',
-    [
-      {
-        id: 'AwsSolutions-SF1',
-        reason: 'Disable cloudwatch logs for simple Step Functions.',
-      },
-    ],
-    true
-  );
-  NagSuppressions.addResourceSuppressionsByPath(
-    stack,
-    '/SequenceRunManagerStack/AutoTriggerBackupMigration/backupMigrationStep/Resource',
-    [
-      {
-        id: 'AwsSolutions-SF2',
-        reason: 'Disable X-Ray for now.',
-      },
-    ],
-    true
-  );
-}

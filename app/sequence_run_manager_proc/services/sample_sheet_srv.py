@@ -12,6 +12,10 @@ from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager.models.comment import Comment, TargetType
 from sequence_run_manager_proc.domain.samplesheet import SampleSheetDomain
+from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
+from sequence_run_manager_proc.domain.events.srssu import (
+    SequenceRunSampleSheetUpdate,
+)
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
 from sequence_run_manager_proc.services.sequence_library_srv import (
     update_sequence_run_libraries_linking,
@@ -72,32 +76,30 @@ def create_sequence_sample_sheet_from_bssh_event(
         return None
 
 
-def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
+def create_sequence_sample_sheet_from_srssu_event(
+    srssu: SequenceRunSampleSheetUpdate,
+) -> tuple[Optional[SampleSheetDomain], Optional[LibraryLinkingDomain]]:
     """
-    Check or create sequence sample sheet from event detail
+    Check or create sequence sample sheet from a SequenceRunSampleSheetUpdate (SRSSU) event detail
+
+    Returns the SampleSheetDomain to announce as a SequenceRunSampleSheetChange (SRSSC)
+    event and, when the library linking changed, the LibraryLinkingDomain to announce as a
+    SequenceRunLibraryLinkingChange (SRLLC) event. Both are None when the sequence run the
+    event names is not found.
     """
-
-    assert event_detail["instrumentRunId"] is not None, "instrument run id is required"
-    assert event_detail["sampleSheetName"] is not None, "sample sheet name is required"
-    assert (
-        event_detail["samplesheetBase64gz"] is not None
-    ), "sample sheet base64 is required"
-
     sequence_run = None
-    instrument_run_id = event_detail["instrumentRunId"]
-    samplesheet_name = event_detail["sampleSheetName"]
+    instrument_run_id = srssu.instrumentRunId
+    samplesheet_name = srssu.sampleSheetName
 
     #  step 1: check if the sequence run exists, create a fake sequence run if not
-    if event_detail.get("sequenceRunId") is not None:
+    if srssu.sequenceRunId is not None:
         try:
-            sequence_run = Sequence.objects.get(
-                sequence_run_id=event_detail["sequenceRunId"]
-            )
+            sequence_run = Sequence.objects.get(sequence_run_id=srssu.sequenceRunId)
         except Sequence.DoesNotExist:
             logger.error(
-                f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence sample sheet from SRSSE event"
+                f"Sequence run {srssu.sequenceRunId} not found when checking or creating sequence sample sheet from SRSSU event"
             )
-            return
+            return None, None
     else:
         # create a fake sequence run
         sequence_run = Sequence.objects.create(
@@ -110,7 +112,7 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
             f"Created a fake sequence run {sequence_run.sequence_run_id} for instrument run {instrument_run_id}"
         )
 
-    content_base64_gz = event_detail["samplesheetBase64gz"]
+    content_base64_gz = srssu.samplesheetBase64gz
     # Decode from base64+gzip to get original CSV string
     original_csv_content = gzip.decompress(base64.b64decode(content_base64_gz)).decode(
         "utf-8"
@@ -127,38 +129,61 @@ def create_sequence_sample_sheet_from_srssc_event(event_detail: dict):
 
     # comment object needed for sample sheet, refer: https://github.com/umccr/orcabus/issues/947
     # step 3: create a comment for the sample sheet
-    if event_detail.get("comment") is not None:
+    description = f"Sample sheet {samplesheet_name} added for sequence run {sequence_run.sequence_run_id} from SRSSU event."
+    if srssu.comment is not None:
         Comment.objects.create(
             target_id=sample_sheet.orcabus_id,
             target_type=TargetType.SAMPLE_SHEET,
-            comment=event_detail["comment"]["comment"],
-            created_by=event_detail["comment"]["createdBy"],
+            comment=srssu.comment.comment,
+            created_by=srssu.comment.createdBy,
         )
         logger.info(f"Created a comment for sample sheet {samplesheet_name}")
+        description += f"\nComment: {srssu.comment.comment}"
     else:
-        logger.info(
-            f"No comment provided for sample sheet {event_detail['sampleSheetName']}"
-        )
+        logger.info(f"No comment provided for sample sheet {samplesheet_name}")
 
-    # step 4: check if there is library linking change, if there is any change, create library associations and emit event to event bridge
+    sample_sheet_domain = SampleSheetDomain(
+        instrument_run_id=sequence_run.instrument_run_id,
+        sequence_run_id=sequence_run.sequence_run_id,
+        sample_sheet=sample_sheet,
+        description=description,
+        sample_sheet_has_changed=True,
+    )
+
+    # step 4: check if there is library linking change, if there is any change, create library associations
+    # (the caller emits the SRSSC event, plus an SRLLC event when the linking changed)
     linking_libraries = list(
         dict.fromkeys(
             entry["sample_id"] for entry in content_dict.get("bclconvert_data", [])
         )
     )
-    if linking_libraries:
-        # update the sequence run libraries linking
-        try:
-            update_sequence_run_libraries_linking(sequence_run, linking_libraries)
-        except Exception as e:
-            logger.error(
-                f"Error updating sequence run libraries linking for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change."
-            )
-            return
-    else:
+    if not linking_libraries:
         logger.info(
             f"No library linking found in samplesheet for sequence run {sequence_run.sequence_run_id}"
         )
+        return sample_sheet_domain, None
+
+    # update the sequence run libraries linking
+    try:
+        library_linking_has_changed = update_sequence_run_libraries_linking(
+            sequence_run, linking_libraries
+        )
+    except Exception as e:
+        logger.error(
+            f"Error updating sequence run libraries linking for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change."
+        )
+        return sample_sheet_domain, None
+
+    if not library_linking_has_changed:
+        return sample_sheet_domain, None
+
+    return sample_sheet_domain, LibraryLinkingDomain(
+        instrument_run_id=sequence_run.instrument_run_id,
+        sequence_run_id=sequence_run.sequence_run_id,
+        linked_libraries=linking_libraries,
+        timestamp=sample_sheet.association_timestamp,
+        library_linking_has_changed=True,
+    )
 
 
 def check_sequence_sample_sheet_from_bssh_event(

@@ -1,0 +1,83 @@
+'$schema': 'http://json-schema.org/draft-04/schema#'
+'$id': 'https://raw.githubusercontent.com/umccr/orcabus/main/docs/schemas/events/sequencerunmanager/SequenceRunSampleSheetUpdate.schema.json'
+description: EventBridge custom event schema for orcabus.sequencerunmanager@SequenceRunSampleSheetUpdate
+title: AWSEvent
+type: object
+required:
+  - detail-type # defines the event type: SequenceRunSampleSheetUpdate
+  - detail # actual event data
+  - source # defines the event emitter: anything but orcabus.sequencerunmanager
+properties:
+  id:
+    type: string
+  region:
+    type: string
+  resources:
+    type: array
+    items:
+      type: string
+  source:
+    type: string
+  time:
+    type: string
+    format: date-time
+  version:
+    type: string
+  account:
+    type: string
+  detail-type:
+    type: string
+  detail:
+    '$ref': '#/definitions/SequenceRunSampleSheetUpdate'
+definitions:
+  SequenceRunSampleSheetUpdate:
+    # Sent by other services to hand a sample sheet to the Sequence Run Manager, which
+    # stores it and announces the result as a SequenceRunSampleSheetChange event.
+    type: object
+    required:
+      # `id` and `version` are recommended but not enforced, so a producer only has to
+      # supply the sample sheet itself (same convention as WorkflowRunUpdate).
+      #      - id
+      #      - version
+      - instrumentRunId
+      - timeStamp
+      - sampleSheetName
+      - samplesheetBase64gz
+    properties:
+      id:
+        # unique id for the data event, e.g. the hashed event data, useful for deduplication.
+        # (This is supposed to only change if the event payload has changed)
+        # NOTE: independent of the AWS event id and in the control of the service emitting the event
+        type: string
+      version:
+        # the version associated with the event schema version (following semver)
+        type: string
+      instrumentRunId:
+        # the instrument run the sample sheet belongs to, e.g. 250328_A01052_0258_AHFGM7DSXF
+        type: string
+      sequenceRunId:
+        # the sequence run to attach the sample sheet to, e.g. r.1234567890abcdefghijklmn
+        # NOTE: optional - when omitted, the Sequence Run Manager creates a new (ghost) sequence run
+        type: string
+      timeStamp:
+        # time of the sample sheet update (not necessarily the event time, which is already covered in the AWS wrapper)
+        type: string
+        format: date-time
+      sampleSheetName:
+        type: string
+      samplesheetBase64gz:
+        # the original sample sheet CSV content, gzip compressed and then base64 encoded
+        type: string
+      comment:
+        # optional comment recorded against the stored sample sheet
+        '$ref': '#/definitions/Comment'
+  Comment:
+    type: object
+    required:
+      - comment
+      - createdBy
+    properties:
+      comment:
+        type: string
+      createdBy:
+        type: string

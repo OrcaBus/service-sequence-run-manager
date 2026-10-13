@@ -51,11 +51,27 @@ export const getSchemas = (): Array<SchemaProps> => {
       ),
     },
     {
+      schemaName: SCHEMA_REGISTRY_NAME + '@SequenceRunSampleSheetUpdate',
+      schemaDescription: 'Sample sheet update event for sequence run by external service',
+      schemaLocation: path.join(
+        __dirname,
+        docBase + '/SequenceRunSampleSheetUpdate/SequenceRunSampleSheetUpdate.schema.json'
+      ),
+    },
+    {
       schemaName: SCHEMA_REGISTRY_NAME + '@SequenceRunLibraryLinkingChange',
       schemaDescription: 'Library linking change event for sequence run by SequenceRunManager',
       schemaLocation: path.join(
         __dirname,
         docBase + '/SequenceRunLibraryLinkingChange/SequenceRunLibraryLinkingChange.schema.json'
+      ),
+    },
+    {
+      schemaName: SCHEMA_REGISTRY_NAME + '@SequenceRunLibraryLinkingUpdate',
+      schemaDescription: 'Library linking update event for sequence run by external service',
+      schemaLocation: path.join(
+        __dirname,
+        docBase + '/SequenceRunLibraryLinkingUpdate/SequenceRunLibraryLinkingUpdate.schema.json'
       ),
     },
   ];

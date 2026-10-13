@@ -150,16 +150,16 @@ def emit_srssc_api_event(event):
     "region": "ap-southeast-2",
     "resources": [],
     "detail": {
+        "id": "<hash of the event data>",
+        "version": "1.1.0", // SRSSC schema version
         "instrumentRunId": "250328_A01052_0258_AHFGM7DSXF",
-        "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id (if empty, a new ghost sequence run is created)
+        "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",
         "sampleSheetName": "sampleSheet_v2.csv",
-        "samplesheetBase64gz": "base64_encoded_samplesheet........",
-        "comment":{
-            "comment": "comment",
-            "created_by": "user",
-            "created_at": "2025-03-01T00:00:00.000000+00:00"
-        }
+        "apiUrl": "https://sequence.dev.umccr.org/api/v1/sample_sheet/ss.01234567890ABCDEF/",
+        "checksum": "<sha256 of the original sample sheet CSV>",
+        "checksumType": "sha256",
+        "description": "Sample sheet sampleSheet_v2.csv added for sequence run r.1234567890abcdefghijklmn through action API.\nComment: comment"
         }
     }
     """
@@ -199,6 +199,8 @@ def emit_srllc_api_event(event):
     "region": "ap-southeast-2",
     "resources": [],
     "detail": {
+        "id": "<hash of the event data>",
+        "version": "1.1.0", // SRLLC schema version
         "instrumentRunId": "250328_A01052_0258_AHFGM7DSXF",
         "sequenceRunId": "r.1234567890abcdefghijklmn", // fake sequence run id (required as sequence run is necessary for library linking)
         "timeStamp": "2025-03-01T00:00:00.000000+00:00",

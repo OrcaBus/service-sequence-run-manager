@@ -6,6 +6,9 @@ from sequence_run_manager.models.sequence import Sequence, LibraryAssociation
 from sequence_run_manager.models.sample_sheet import SampleSheet
 from sequence_run_manager_proc.services.bssh_srv import BSSHService
 from sequence_run_manager_proc.domain.librarylinking import LibraryLinkingDomain
+from sequence_run_manager_proc.domain.events.srllu import (
+    SequenceRunLibraryLinkingUpdate,
+)
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -40,9 +43,11 @@ def create_sequence_run_libraries_linking(
 
 def update_sequence_run_libraries_linking(
     sequence_run: Sequence, linked_libraries: list[str]
-):
+) -> bool:
     """
     Update sequence run libraries linking
+
+    Returns True when new library associations were created, i.e. the linking changed.
     """
     if (
         LibraryAssociation.objects.filter(sequence=sequence_run).exists()
@@ -55,7 +60,7 @@ def update_sequence_run_libraries_linking(
             logger.info(
                 f"Library associations already exist for sequence run {sequence_run.sequence_run_id}, linked libraries: {linked_libraries}"
             )
-            return
+            return False
         else:
             LibraryAssociation.objects.filter(sequence=sequence_run).delete()
             logger.info(
@@ -66,14 +71,15 @@ def update_sequence_run_libraries_linking(
         logger.info(
             f"No libraries found for sequence run {sequence_run.sequence_run_id}, skipping library associations creation"
         )
-        return
+        return False
     try:
         create_sequence_run_libraries_linking(sequence_run, linked_libraries)
     except Exception as e:
         logger.error(
             f"Error creating library associations for sequence {sequence_run.sequence_run_id}: {str(e)}. Will retry on next state change."
         )
-        return
+        return False
+    return True
 
 
 def get_libraries_from_bssh(api_url: str) -> list[str]:
@@ -231,41 +237,54 @@ def check_sequence_run_libraries_linking_from_bssh_event(
 
 
 @transaction.atomic
-def update_sequence_run_libraries_linking_from_srllc_event(event_detail: dict):
+def update_sequence_run_libraries_linking_from_srllu_event(
+    srllu: SequenceRunLibraryLinkingUpdate,
+) -> Optional[LibraryLinkingDomain]:
     """
-    This function is used to check or create sequence run libraries linking from event details(SRLLC)
-    event detail example:
+    This function is used to check or create sequence run libraries linking from a
+    SequenceRunLibraryLinkingUpdate (SRLLU) event detail, e.g.
     {
-    "sequenceRunId": "r.1234567890ABCDEFGHIJKLMN", // orcabusid for the sequence run (fake run)
+    "sequenceRunId": "r.1234567890ABCDEFGHIJKLMN", // sequence run id (e.g. of a fake run)
     "linkedLibraries": [
                 "L2000000",
                 "L2000001",
                 "L2000002"
                 ]
     }
-    """
-    assert event_detail["sequenceRunId"] is not None, "sequence run id is required"
-    assert event_detail["linkedLibraries"] is not None, "linked libraries are required"
 
+    Returns the LibraryLinkingDomain to announce as a SequenceRunLibraryLinkingChange
+    (SRLLC) event when the linking changed, otherwise None.
+    """
     try:
-        sequence_run = Sequence.objects.get(
-            sequence_run_id=event_detail["sequenceRunId"]
-        )
+        sequence_run = Sequence.objects.get(sequence_run_id=srllu.sequenceRunId)
     except Sequence.DoesNotExist:
         logger.error(
-            f"Sequence run {event_detail['sequenceRunId']} not found when checking or creating sequence run libraries linking"
+            f"Sequence run {srllu.sequenceRunId} not found when checking or creating sequence run libraries linking"
         )
-        return
+        return None
 
-    linked_libraries = event_detail["linkedLibraries"]
+    linked_libraries = srllu.linkedLibraries
 
     try:
-        update_sequence_run_libraries_linking(sequence_run, linked_libraries)
+        library_linking_has_changed = update_sequence_run_libraries_linking(
+            sequence_run, linked_libraries
+        )
     except Exception as e:
         logger.error(
             f"Error updating sequence run libraries linking for sequence {sequence_run.sequence_run_id}: {str(e)}."
         )
-        return
+        return None
+
+    if not library_linking_has_changed:
+        return None
+
+    return LibraryLinkingDomain(
+        instrument_run_id=sequence_run.instrument_run_id,
+        sequence_run_id=sequence_run.sequence_run_id,
+        linked_libraries=linked_libraries,
+        timestamp=timezone.now(),
+        library_linking_has_changed=True,
+    )
 
 
 # metadata manager service
