@@ -11,7 +11,7 @@ Each event is contained in its own directory and accompanied by examples.
 | `SequenceRunSampleSheetChange`    | SRSSC | Sequence Run Manager (`orcabus.sequencerunmanager`)          | downstream services  |
 | `SequenceRunLibraryLinkingChange` | SRLLC | Sequence Run Manager (`orcabus.sequencerunmanager`)          | downstream services  |
 | `SequenceRunSampleSheetUpdate`    | SRSSU | other services (any source but `orcabus.sequencerunmanager`) | Sequence Run Manager |
-| `SequenceRunLibraryLinkingUpdate` | SRLLU | other services (any source but `orcabus.sequencerunmanager`) | Sequence Run Manager |
+| `SequenceRunLibraryLinkingUpdate` | SRLLU | not accepted yet (see below)                                 | -                    |
 
 Like the Workflow Manager's `WorkflowRunUpdate` / `WorkflowRunStateChange` pair, `*Update` events are
 requests from other services and `*Change` events are announcements by the Sequence Run Manager:
@@ -19,8 +19,9 @@ requests from other services and `*Change` events are announcements by the Seque
 - **SRSSU → SRSSC**: the Sequence Run Manager stores the sample sheet carried by an SRSSU (on the named
   sequence run, or on a new (ghost) sequence run when `sequenceRunId` is omitted) and announces it as an
   SRSSC. When the sample sheet changes the library linking, an SRLLC follows.
-- **SRLLU → SRLLC**: the Sequence Run Manager applies the library linking carried by an SRLLU and, when
-  the linking changed, announces it as an SRLLC.
+- **SRLLU → SRLLC**: not enabled. Other services may change the library linking only through a sample
+  sheet (SRSSU), so no event rule routes SRLLU to the Sequence Run Manager. The schema and the
+  `librarylinking_event.py` handler are kept in case a library-linking-only update is allowed later.
 
 So a `*Change` event always comes from the Sequence Run Manager, regardless of whether the change
 originated from BSSH, the API or an `*Update` event.
@@ -126,6 +127,8 @@ unchanged linking yields the same id (see `app/sequence_run_manager_proc/domain/
 | Version | Change                                                                                                   |
 | ------- | -------------------------------------------------------------------------------------------------------- |
 | 1.0.0   | Initial schema. Replaces the `SequenceRunLibraryLinkingChange` events previously sent by other services. |
+
+SRLLU is defined but not consumed yet (see [Events](#events)).
 
 For both `*Update` events, `id` and `version` are optional and owned by the emitting service: `id` should be
 a hash of the event data (only changing when the data changes) and `version` the `*Update` schema version

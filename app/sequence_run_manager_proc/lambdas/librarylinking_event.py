@@ -21,6 +21,10 @@ def event_handler(event, context):
     """
     This lambda function is used to handle the library linking event from the event bus
 
+    NOTE: not deployed - no event rule routes SRLLU events here. Other services may change the
+    library linking only through a sample sheet (SRSSU, see samplesheet_event.py). The handler
+    is kept in case a library-linking-only update is allowed later.
+
     SRLLU event payload dict (sent by other services, i.e. any source but orcabus.sequencerunmanager)
     {
     "version": "0",

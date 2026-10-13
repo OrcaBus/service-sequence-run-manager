@@ -144,7 +144,9 @@ export class SequenceRunManagerStack extends GitStack {
     this.createProcSqsHandler();
     this.createSlackNotificationHandler(props.slackTopicName, props.orcabusUIBaseUrl);
     this.createProcSampleSheetHandler();
-    this.createProcLibraryLinkingHandler();
+    // No SRLLU handler is deployed: other services may change the library linking only through a
+    // sample sheet (SRSSU). The `librarylinking_event.py` lambda code is kept but not wired up.
+    // this.createProcLibraryLinkingHandler();
   }
 
   private createPythonFunction(name: string, props: object): PythonFunction {

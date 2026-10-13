@@ -34,6 +34,8 @@ definitions:
     # Sent by other services to (re)link libraries to a sequence run. The Sequence Run
     # Manager applies it and, when the linking changed, announces the result as a
     # SequenceRunLibraryLinkingChange event.
+    # NOTE: not consumed yet - other services may change the library linking only through a
+    # sample sheet (SequenceRunSampleSheetUpdate), so no event rule routes this event to the SRM.
     type: object
     required:
       # `id` and `version` are recommended but not enforced, so a producer only has to
